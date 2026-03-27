@@ -3,6 +3,8 @@ from flask_cors import CORS
 import pacientes as pac
 from config import init_data_dir
 import historia as hist
+import exportacion as exp
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -69,6 +71,38 @@ def post_evento(dni):
         return jsonify({"error": str(e)}), 423
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+@app.route("/exportar", methods=["GET"])
+def exportar():
+    import io
+    anonimizar = request.args.get("anonimizar", "false").lower() == "true"
+    
+    wb, n_pac, n_ev = exp.consolidar(anonimizar_datos=anonimizar)
+    if not wb:
+        return jsonify({"error": "No hay datos para exportar"}), 404
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    nombre = f"odontosoft_{'anonimizado_' if anonimizar else ''}{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    from flask import send_file
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=nombre
+    )
+
+@app.route("/exportar/preview", methods=["GET"])
+def exportar_preview():
+    """Devuelve un resumen sin descargar el archivo."""
+    _, n_pac, n_ev = exp.consolidar(anonimizar_datos=False)
+    return jsonify({
+        "pacientes": n_pac,
+        "eventos": n_ev,
+    })
 
 if __name__ == "__main__":
     app.run(port=5050, debug=True)

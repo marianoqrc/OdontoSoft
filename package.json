@@ -11,23 +11,29 @@
     "preview": "vite preview"
   },
   "build": {
-    "appId": "com.odontosoft.app",
-    "productName": "OdontoSoft",
-    "directories": {
-      "output": "release"
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "public/icon.ico"
-    },
-    "linux": {
-      "target": "AppImage"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "node_modules/**/*"
-    ]
+  "appId": "com.odontosoft.app",
+  "productName": "OdontoSoft",
+  "directories": {
+    "output": "release"
+  },
+  "extraResources": [
+    {
+      "from": "backend",
+      "to": "backend",
+      "filter": ["**/*", "!__pycache__", "!*.pyc", "!datos"]
+    }
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "public/icon.ico"
+  },
+  "linux": {
+    "target": "AppImage"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ]
   },
   "dependencies": {
     "react": "^18.3.1",
