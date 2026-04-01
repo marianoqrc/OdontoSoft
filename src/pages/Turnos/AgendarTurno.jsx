@@ -1,33 +1,33 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
-import { format, addDays, subDays } from 'date-fns'
+import { format, addDays, subDays, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Modal from '../../components/Modal.jsx'
 import Toast from '../../components/Toast.jsx'
 
-
 export default function AgendarTurno({ onVolver }) {
-  console.log('AgendarTurno montado')
-  const [dia, setDia]             = useState(new Date())
-  const [turno, setTurno]         = useState('manana')
-  const [modulos, setModulos]     = useState([])
+  const [dia, setDia] = useState(new Date())
+  const [turno, setTurno] = useState('manana')
+  const [modulos, setModulos] = useState([])
   const [seleccionados, setSeleccionados] = useState([])
+  const [inicioSelec, setInicioSelec] = useState(null)
+  const [hoveredHora, setHoveredHora] = useState(null)
   const [pacientes, setPacientes] = useState([])
-  const [modal, setModal]         = useState(false)
-  const [form, setForm]           = useState({ dni_paciente: '', nombre_paciente: '', motivo: '' })
+  const [modal, setModal] = useState(false)
+  const [form, setForm] = useState({ dni_paciente: '', nombre_paciente: '', motivo: '' })
   const [guardando, setGuardando] = useState(false)
-  const [toast, setToast]         = useState(null)
+  const [toast, setToast] = useState(null)
 
   const cargarModulos = useCallback(async () => {
     const fecha = format(dia, 'yyyy-MM-dd')
     try {
       const res = await fetch(`http://localhost:5050/turnos/disponibilidad/${fecha}?turno=${turno}`)
       const data = await res.json()
-      console.log('datos recibidos:', data)
       setModulos(data)
       setSeleccionados([])
+      setInicioSelec(null)
+      setHoveredHora(null)
     } catch(e) {
-      console.log('error en fetch:', e)
       setModulos([])
     }
   }, [dia, turno])
@@ -44,9 +44,41 @@ export default function AgendarTurno({ onVolver }) {
   function toggleModulo(hora) {
     const mod = modulos.find(m => m.hora === hora)
     if (mod?.estado === 'ocupado') return
-    setSeleccionados(prev =>
-      prev.includes(hora) ? prev.filter(h => h !== hora) : [...prev, hora]
-    )
+
+    if (!inicioSelec) {
+      setInicioSelec(hora)
+      setSeleccionados([hora])
+      return
+    }
+
+    if (inicioSelec === hora) {
+      setInicioSelec(null)
+      setSeleccionados([])
+      return
+    }
+
+    const todasLasHoras = modulos.map(m => m.hora)
+    const idxInicio = todasLasHoras.indexOf(inicioSelec)
+    const idxFin = todasLasHoras.indexOf(hora)
+
+    if (idxFin < idxInicio) {
+      setInicioSelec(hora)
+      setSeleccionados([hora])
+      return
+    }
+
+    const rangoHoras = todasLasHoras.slice(idxInicio, idxFin + 1)
+    const hayOcupado = rangoHoras.some(h => modulos.find(m => m.hora === h)?.estado === 'ocupado')
+
+    if (hayOcupado) {
+      setInicioSelec(hora)
+      setSeleccionados([hora])
+      return
+    }
+
+    setSeleccionados(rangoHoras)
+    setInicioSelec(null)
+    setHoveredHora(null)
   }
 
   function calcularRango() {
@@ -76,8 +108,6 @@ export default function AgendarTurno({ onVolver }) {
       return
     }
     const rango = calcularRango()
-    console.log('módulos:', modulos.length, modulos)
-    console.log('modulos al renderizar:', modulos)
     if (!rango) return
     setGuardando(true)
     try {
@@ -96,6 +126,8 @@ export default function AgendarTurno({ onVolver }) {
       setToast({ msg: 'Turno agendado correctamente', type: 'success' })
       setModal(false)
       setSeleccionados([])
+      setInicioSelec(null)
+      setHoveredHora(null)
       cargarModulos()
     } catch (e) {
       setToast({ msg: e.message, type: 'error' })
@@ -104,9 +136,36 @@ export default function AgendarTurno({ onVolver }) {
     }
   }
 
+  const estaEnRangoVisual = (hora) => {
+    if (seleccionados.includes(hora)) return true
+    if (inicioSelec && hoveredHora) {
+      const todasLasHoras = modulos.map(m => m.hora)
+      const idxInicio = todasLasHoras.indexOf(inicioSelec)
+      const idxHover = todasLasHoras.indexOf(hoveredHora)
+      const idxActual = todasLasHoras.indexOf(hora)
+      
+      if (idxHover > idxInicio) {
+        const rangoH = todasLasHoras.slice(idxInicio, idxHover + 1)
+        const hayOcupado = rangoH.some(h => modulos.find(m => m.hora === h)?.estado === 'ocupado')
+        if (!hayOcupado) {
+          return idxActual >= idxInicio && idxActual <= idxHover
+        }
+      }
+    }
+    return false
+  }
+
   const rango = calcularRango()
-  console.log('módulos:', modulos.length, modulos)
   const campo = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+
+  const textoInstructivo = () => {
+    if (!inicioSelec && seleccionados.length === 0)
+      return 'Hacé clic en un módulo para marcar el inicio del turno'
+    if (inicioSelec)
+      return `Inicio: ${inicioSelec} — ahora hacé clic en el módulo final`
+    if (seleccionados.length > 0 && rango)
+      return `Turno seleccionado: ${rango.inicio} — ${rango.fin} (${seleccionados.length * 15} min)`
+  }
 
   return (
     <div>
@@ -117,11 +176,10 @@ export default function AgendarTurno({ onVolver }) {
           <button className="btn btn-secondary btn-sm" onClick={onVolver}>
             <ArrowLeft size={14} /> Volver
           </button>
-          <div>
-            <div className="page-title">Agendar turno</div>
-            <div className="page-subtitle">
-              {format(dia, "EEEE d 'de' MMMM yyyy", { locale: es })}
-            </div>
+          {/* Header Unificado: Título y Fecha en una sola línea y en negrita */}
+          <div className="page-title" style={{ fontWeight: 600 }}>
+            Agendar turno - {' '}
+            {format(dia, "EEEE d 'de' MMMM yyyy", { locale: es })}
           </div>
         </div>
       </div>
@@ -131,9 +189,30 @@ export default function AgendarTurno({ onVolver }) {
           <button className="btn btn-secondary btn-sm" onClick={() => setDia(d => subDays(d, 1))}>
             <ChevronLeft size={14} />
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setDia(new Date())}>
-            Hoy
+          
+          <button 
+            className="btn btn-secondary btn-sm" 
+            onClick={() => setDia(new Date())}
+            disabled={isToday(dia)}
+            style={{
+              minWidth: '100px',
+              // Centrado de texto explícito
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              // Formato solicitado: SIN COLOR AZUL. Mantener color por defecto.
+              color: isToday(dia) ? 'var(--text2)' : 'inherit', 
+              borderColor: 'var(--border)',
+              background: 'var(--surface)',
+              // Solo cambiamos peso de fuente para mostrar estado
+              fontWeight: isToday(dia) ? 600 : 400,
+              cursor: isToday(dia) ? 'default' : 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            {isToday(dia) ? 'Hoy' : 'Volver a hoy'}
           </button>
+          
           <button className="btn btn-secondary btn-sm" onClick={() => setDia(d => addDays(d, 1))}>
             <ChevronRight size={14} />
           </button>
@@ -162,28 +241,48 @@ export default function AgendarTurno({ onVolver }) {
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-        <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
-          Hacé clic en los módulos para seleccionar el horario del turno
-        </div>
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-          gap: 8,
+          fontSize: 12, marginBottom: 14,
+          color: inicioSelec ? 'var(--primary)' : 'var(--text2)',
+          fontWeight: inicioSelec ? 600 : 400,
         }}>
+          {textoInstructivo()}
+        </div>
+
+        <div 
+          onMouseLeave={() => setHoveredHora(null)}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+            gap: 8,
+          }}
+        >
           {modulos.map(({ hora, estado }) => {
-            const seleccionado = seleccionados.includes(hora)
             const ocupado = estado === 'ocupado'
+            const enRango = estaEnRangoVisual(hora)
+            const esInicio = hora === inicioSelec
+            
             return (
               <button
                 key={hora}
                 onClick={() => toggleModulo(hora)}
+                onMouseEnter={() => !ocupado && setHoveredHora(hora)}
                 disabled={ocupado}
                 style={{
                   padding: '10px 8px',
                   borderRadius: 6,
-                  border: `2px solid ${seleccionado ? 'var(--primary)' : '#d1d5db'}`,
-                  background: seleccionado ? 'var(--primary)' : ocupado ? '#f3f4f6' : '#fff',
-                  color: seleccionado ? '#fff' : ocupado ? '#9ca3af' : '#111',
+                  border: `2px solid ${
+                    esInicio ? '#f59e0b' :
+                    enRango ? '#2563eb' : '#d1d5db'
+                  }`,
+                  background:
+                    esInicio ? '#fef3c7' :
+                    enRango ? '#2563eb' :
+                    ocupado ? '#f3f4f6' : '#fff',
+                  color:
+                    esInicio ? '#92400e' :
+                    enRango ? '#fff' :
+                    ocupado ? '#9ca3af' : '#111',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: ocupado ? 'not-allowed' : 'pointer',
@@ -201,11 +300,11 @@ export default function AgendarTurno({ onVolver }) {
         </div>
       </div>
 
-      {seleccionados.length > 0 && rango && (
+      {seleccionados.length > 1 && rango && !inicioSelec && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '14px 20px', background: '#eff6ff',
-          borderRadius: 8, border: '1px solid #2563eb'
+          borderRadius: 8, border: '1px solid #2563eb', marginBottom: 16
         }}>
           <div style={{ fontSize: 13 }}>
             <strong>{rango.inicio} — {rango.fin}</strong>
@@ -213,12 +312,20 @@ export default function AgendarTurno({ onVolver }) {
               ({seleccionados.length * 15} minutos)
             </span>
           </div>
-          <button
-            className="btn btn-primary"
-            onClick={() => { setForm({ dni_paciente: '', nombre_paciente: '', motivo: '' }); setModal(true) }}
-          >
-            Agendar turno
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => { setSeleccionados([]); setInicioSelec(null); setHoveredHora(null); }}
+            >
+              Limpiar
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => { setForm({ dni_paciente: '', nombre_paciente: '', motivo: '' }); setModal(true) }}
+            >
+              Agendar turno
+            </button>
+          </div>
         </div>
       )}
 

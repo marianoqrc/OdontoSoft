@@ -230,3 +230,28 @@ def proximos_turnos(dias=7):
                       and t.get("estado") != "cancelado"]
             resultado.extend(del_dia)
     return sorted(resultado, key=lambda t: (str(t["fecha"]), str(t["hora_inicio"])))
+
+def actualizar_turno(turno_id, datos):
+    init_turnos()
+    try:
+        wb = load_workbook(TURNOS_FILE)
+        ws = wb["Turnos"]
+        headers = [c.value for c in ws[1]]
+        id_col = headers.index("id") + 1
+        nombre_col = headers.index("nombre_paciente") + 1
+        motivo_col = headers.index("motivo") + 1
+
+        for row in ws.iter_rows(min_row=2):
+            if row[id_col-1].value == turno_id:
+                # Si mandamos nombre nuevo, lo actualiza
+                if "nombre_paciente" in datos:
+                    row[nombre_col-1].value = datos["nombre_paciente"]
+                # Si mandamos motivo nuevo, lo actualiza
+                if "motivo" in datos:
+                    row[motivo_col-1].value = datos["motivo"]
+                break
+                
+        wb.save(TURNOS_FILE)
+        return {"ok": True}
+    except PermissionError:
+        raise PermissionError("El archivo de turnos está abierto. Cerralo y volvé a intentar.")

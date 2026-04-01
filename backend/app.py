@@ -133,6 +133,7 @@ def crear_turno():
     except PermissionError as e:
         return jsonify({"error": str(e)}), 423
 
+# Así tiene que quedar en tu app.py
 @app.route("/turnos/<int:turno_id>", methods=["DELETE"])
 def cancelar_turno(turno_id):
     try:
@@ -140,6 +141,17 @@ def cancelar_turno(turno_id):
         return jsonify(resultado)
     except PermissionError as e:
         return jsonify({"error": str(e)}), 423
+    
+@app.route("/turnos/<int:turno_id>", methods=["PUT"])
+def modificar_turno(turno_id):
+    try:
+        datos = request.get_json()
+        resultado = tur.actualizar_turno(turno_id, datos)
+        return jsonify(resultado)
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 423
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(port=5050, debug=True)

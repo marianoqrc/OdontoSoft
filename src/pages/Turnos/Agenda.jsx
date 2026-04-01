@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, addDays, subDays, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
+import Modal from '../../components/Modal.jsx' 
 
 function duracionTexto(mins) {
   if (mins < 60) return `${mins} min`
@@ -11,10 +12,12 @@ function duracionTexto(mins) {
 }
 
 export default function Agenda({ onVolver }) {
-  const [dia, setDia]       = useState(new Date())
-  const [turno, setTurno]   = useState('manana') // 'manana' | 'tarde'
+  const [dia, setDia] = useState(new Date())
+  const [turno, setTurno] = useState('manana') 
   const [bloques, setBloques] = useState([])
   const [cargando, setCargando] = useState(false)
+  
+  const [turnoSeleccionado, setTurnoSeleccionado] = useState(null)
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -32,6 +35,60 @@ export default function Agenda({ onVolver }) {
 
   useEffect(() => { cargar() }, [cargar])
 
+  async function eliminarTurno() {
+    if (!turnoSeleccionado || !turnoSeleccionado.id) {
+        alert("Error: No se encontró el ID de este turno.");
+        return;
+    }
+
+    const confirmar = window.confirm(
+      `¿Estás seguro que querés cancelar el turno de ${turnoSeleccionado.nombre_paciente} de las ${turnoSeleccionado.hora_inicio}?`
+    );
+    if (!confirmar) return;
+
+    try {
+      const res = await fetch(`http://localhost:5050/turnos/${turnoSeleccionado.id}`, {
+        method: 'DELETE'
+      });
+      
+      const data = await res.json();
+
+      if (!res.ok) {
+          throw new Error(data.error || 'Error al eliminar el turno');
+      }
+      
+      setTurnoSeleccionado(null); 
+      cargar(); 
+      
+    } catch (error) {
+      alert("Hubo un problema al eliminar el turno: " + error.message);
+    }
+  }
+
+  async function guardarCambios() {
+    if (!turnoSeleccionado || !turnoSeleccionado.id) return;
+    
+    try {
+      const res = await fetch(`http://localhost:5050/turnos/${turnoSeleccionado.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre_paciente: turnoSeleccionado.nombre_paciente,
+          motivo: turnoSeleccionado.motivo
+        })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar el turno');
+      
+      setTurnoSeleccionado(null); 
+      cargar(); 
+      
+    } catch (error) {
+      alert("Hubo un problema al guardar: " + error.message);
+    }
+  }
+
   return (
     <div>
       {/* Header */}
@@ -40,33 +97,45 @@ export default function Agenda({ onVolver }) {
           <button className="btn btn-secondary btn-sm" onClick={onVolver}>
             <ArrowLeft size={14} /> Volver
           </button>
-          <div>
-            <div className="page-title">Agenda</div>
-            <div className="page-subtitle">
-              {format(dia, "EEEE d 'de' MMMM yyyy", { locale: es })}
-              {isToday(dia) && <span className="badge badge-blue" style={{ marginLeft: 8 }}>Hoy</span>}
-            </div>
+          <div className="page-title" style={{ fontWeight: 600 }}>
+            Agenda - {' '}
+            {format(dia, "EEEE d 'de' MMMM yyyy", { locale: es })}
           </div>
         </div>
       </div>
 
       {/* Controles */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-
-        {/* Navegación de día */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button className="btn btn-secondary btn-sm" onClick={() => setDia(d => subDays(d, 1))}>
             <ChevronLeft size={14} />
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setDia(new Date())}>
-            Hoy
+          
+          <button 
+            className="btn btn-secondary btn-sm" 
+            onClick={() => setDia(new Date())}
+            disabled={isToday(dia)}
+            style={{
+              minWidth: '100px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              color: isToday(dia) ? 'var(--text2)' : 'inherit', 
+              borderColor: 'var(--border)',
+              background: 'var(--surface)',
+              fontWeight: isToday(dia) ? 600 : 400,
+              cursor: isToday(dia) ? 'default' : 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            {isToday(dia) ? 'Hoy' : 'Volver a hoy'}
           </button>
+          
           <button className="btn btn-secondary btn-sm" onClick={() => setDia(d => addDays(d, 1))}>
             <ChevronRight size={14} />
           </button>
         </div>
 
-        {/* Switch mañana/tarde */}
         <div style={{
           display: 'flex', borderRadius: 6, overflow: 'hidden',
           border: '1px solid var(--border)', marginLeft: 'auto'
@@ -91,7 +160,6 @@ export default function Agenda({ onVolver }) {
 
       {/* Timeline */}
       <div style={{ position: 'relative', paddingLeft: 24 }}>
-        {/* Línea vertical */}
         <div style={{
           position: 'absolute', left: 8, top: 8, bottom: 8,
           width: 2, background: 'var(--border)', borderRadius: 2
@@ -123,13 +191,32 @@ export default function Agenda({ onVolver }) {
               }} />
 
               {/* Tarjeta del bloque */}
-              <div style={{
-                flex: 1,
-                padding: '12px 16px',
-                borderRadius: 8,
-                border: `1.5px solid ${bloque.tipo === 'ocupado' ? 'var(--border)' : '#bbf7d0'}`,
-                background: bloque.tipo === 'ocupado' ? 'var(--surface)' : '#f0fdf4',
-              }}>
+              <div 
+                onClick={() => {
+                  if (bloque.tipo === 'ocupado') {
+                    setTurnoSeleccionado({
+                      ...bloque.turno,
+                      hora_inicio: bloque.hora_inicio,
+                      hora_fin: bloque.hora_fin
+                    });
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: `1.5px solid ${bloque.tipo === 'ocupado' ? 'var(--border)' : '#bbf7d0'}`,
+                  background: bloque.tipo === 'ocupado' ? 'var(--surface)' : '#f0fdf4',
+                  cursor: bloque.tipo === 'ocupado' ? 'pointer' : 'default',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseOver={(e) => {
+                   if(bloque.tipo === 'ocupado') e.currentTarget.style.backgroundColor = '#f8f9fa'
+                }}
+                onMouseOut={(e) => {
+                   if(bloque.tipo === 'ocupado') e.currentTarget.style.backgroundColor = 'var(--surface)'
+                }}
+              >
                 {/* Horario y duración */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontWeight: 700, fontSize: 14 }}>
@@ -161,6 +248,83 @@ export default function Agenda({ onVolver }) {
           ))}
         </div>
       </div>
+
+      {/* MODAL DE GESTIÓN DE TURNO */}
+      {turnoSeleccionado && (
+        <Modal
+          title={`Gestión de Turno`}
+          onClose={() => setTurnoSeleccionado(null)}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            
+            {/* Información estática del turno */}
+            <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Horario:</div>
+              <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--primary)' }}>
+                {turnoSeleccionado.hora_inicio} — {turnoSeleccionado.hora_fin}
+              </div>
+            </div>
+
+            {/* Formulario Editable */}
+            <div className="form-group">
+              <label>Paciente</label>
+              <input 
+                type="text" 
+                value={turnoSeleccionado.nombre_paciente || ''} 
+                onChange={(e) => setTurnoSeleccionado({...turnoSeleccionado, nombre_paciente: e.target.value})}
+                style={{ background: '#fff', border: '1px solid var(--border)', padding: '8px', borderRadius: '4px', width: '100%' }}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Motivo</label>
+              <input 
+                type="text" 
+                value={turnoSeleccionado.motivo || ''} 
+                onChange={(e) => setTurnoSeleccionado({...turnoSeleccionado, motivo: e.target.value})}
+                style={{ background: '#fff', border: '1px solid var(--border)', padding: '8px', borderRadius: '4px', width: '100%' }}
+              />
+            </div>
+
+            {/* Zona de Peligro / Acciones */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginTop: 10,
+              paddingTop: 16,
+              borderTop: '1px solid var(--border)'
+            }}>
+              
+              <button 
+                className="btn" 
+                style={{ background: '#fee2e2', color: '#dc2626', border: 'none', fontWeight: 600 }}
+                onClick={eliminarTurno}
+              >
+                Eliminar Turno
+              </button>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => setTurnoSeleccionado(null)}
+                >
+                  Cerrar
+                </button>
+                <button 
+                  className="btn btn-primary"
+                  onClick={guardarCambios}
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </Modal>
+      )}
+
     </div>
   )
 }
