@@ -29,3 +29,7 @@ dist/
 *.njsproj
 *.sln
 *.sw?
+
+# Electron builds
+release/
+dist/
