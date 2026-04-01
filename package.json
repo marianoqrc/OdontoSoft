@@ -4,7 +4,7 @@
   "description": "Sistema de gestión odontológica local",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently \"npm run vite\" \"npm run electron\"",
+    "dev": "vite",
     "vite": "vite",
 "electron": "wait-on http://localhost:5173 && set NODE_ENV=development && electron .",
     "build": "vite build && electron-builder",

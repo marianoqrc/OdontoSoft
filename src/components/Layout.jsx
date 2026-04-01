@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Users, FileText, Download, BarChart2 } from 'lucide-react'
+import { Users, FileText, Download, CalendarDays } from 'lucide-react'
 
 const NAV = [
-  { to: '/pacientes',   icon: Users,     label: 'Pacientes'    },
-  { to: '/historia',    icon: FileText,  label: 'Historia Clínica' },
-  { to: '/exportacion', icon: Download,  label: 'Exportación'  },
+  { to: '/pacientes',   icon: Users,        label: 'Pacientes'        },
+  { to: '/turnos',      icon: CalendarDays, label: 'Turnos'           },
+  { to: '/historia',    icon: FileText,     label: 'Historia Clínica' },
+  { to: '/exportacion', icon: Download,     label: 'Exportación'      },
 ]
 
 export default function Layout() {

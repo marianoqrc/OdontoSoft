@@ -30,19 +30,22 @@ def listar_pacientes():
     pacientes = []
 
     for dni in os.listdir(DATA_DIR):
+        # Ignorar archivos, solo procesar carpetas
+        ruta_carpeta = os.path.join(DATA_DIR, dni)
+        if not os.path.isdir(ruta_carpeta):
+            continue
+
         ruta = get_ruta_paciente(dni)
         if not os.path.exists(ruta):
             continue
         try:
             wb = load_workbook(ruta, read_only=True)
             ws = wb["Paciente"]
-
             headers = [cell.value for cell in ws[1]]
             if ws.max_row < 2:
                 wb.close()
                 continue
 
-            # Buscar la última fila con datos (no vacía)
             ultima_fila = None
             for row in ws.iter_rows(min_row=2):
                 valores = [cell.value for cell in row]
@@ -56,7 +59,6 @@ def listar_pacientes():
 
             paciente = dict(zip(headers, ultima_fila))
 
-            # Solo incluir activos con DNI válido
             if paciente.get("activo") != False and paciente.get("dni"):
                 pacientes.append(paciente)
 

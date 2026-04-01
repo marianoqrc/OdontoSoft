@@ -5,6 +5,9 @@ from config import init_data_dir
 import historia as hist
 import exportacion as exp
 from datetime import datetime
+import turnos as tur
+
+#D:\soft\odontosoft\backend> d:\soft\odontosoft\backend\.venv\Scripts\python.exe app.py
 
 app = Flask(__name__)
 CORS(app)
@@ -103,6 +106,40 @@ def exportar_preview():
         "pacientes": n_pac,
         "eventos": n_ev,
     })
+
+@app.route("/turnos/disponibilidad/<fecha>", methods=["GET"])
+def disponibilidad(fecha):
+    turno = request.args.get("turno", "manana")
+    return jsonify(tur.get_disponibilidad(fecha, turno))
+
+@app.route("/turnos/timeline/<fecha>", methods=["GET"])
+def timeline(fecha):
+    turno = request.args.get("turno", "manana")
+    return jsonify(tur.get_timeline(fecha, turno))
+
+@app.route("/turnos", methods=["GET"])
+def get_turnos():
+    dias = int(request.args.get("dias", 7))
+    return jsonify(tur.proximos_turnos(dias))
+
+@app.route("/turnos", methods=["POST"])
+def crear_turno():
+    try:
+        datos = request.get_json()
+        resultado = tur.crear_turno(datos)
+        return jsonify(resultado), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 423
+
+@app.route("/turnos/<int:turno_id>", methods=["DELETE"])
+def cancelar_turno(turno_id):
+    try:
+        resultado = tur.cancelar_turno(turno_id)
+        return jsonify(resultado)
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 423
 
 if __name__ == "__main__":
     app.run(port=5050, debug=True)
