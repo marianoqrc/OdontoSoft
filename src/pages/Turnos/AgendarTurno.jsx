@@ -334,43 +334,48 @@ export default function AgendarTurno({ onVolver }) {
           title={`Nuevo turno — ${format(dia, 'd/MM/yyyy')} de ${rango.inicio} a ${rango.fin}`}
           onClose={() => setModal(false)}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="form-group">
-              <label>Paciente registrado</label>
-              <select onChange={seleccionarPaciente} value={form.dni_paciente}>
-                <option value="">Seleccioná un paciente...</option>
-                {pacientes.map(p => (
-                  <option key={p.dni} value={p.dni}>
-                    {p.apellido}, {p.nombre} — {p.dni}
-                  </option>
-                ))}
-              </select>
+          {/* NUEVO: Envolvemos en un formulario para el Enter */}
+          <form onSubmit={(e) => { e.preventDefault(); confirmarTurno(); }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="form-group">
+                <label>Paciente registrado</label>
+                <select onChange={seleccionarPaciente} value={form.dni_paciente} autoFocus>
+                  <option value="">Seleccioná un paciente...</option>
+                  {pacientes.map(p => (
+                    <option key={p.dni} value={p.dni}>
+                      {p.apellido}, {p.nombre} — {p.dni}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>O escribí el nombre manualmente</label>
+                <input
+                  placeholder="Nombre completo"
+                  value={form.nombre_paciente}
+                  onChange={campo('nombre_paciente')}
+                />
+              </div>
+              <div className="form-group">
+                <label>Motivo de la consulta</label>
+                <input
+                  placeholder="Ej: Limpieza, control, dolor..."
+                  value={form.motivo}
+                  onChange={campo('motivo')}
+                />
+              </div>
             </div>
-            <div className="form-group">
-              <label>O escribí el nombre manualmente</label>
-              <input
-                placeholder="Nombre completo"
-                value={form.nombre_paciente}
-                onChange={campo('nombre_paciente')}
-              />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              {/* type="button" para Cancelar */}
+              <button type="button" className="btn btn-secondary" onClick={() => setModal(false)}>
+                Cancelar
+              </button>
+              {/* type="submit" para Guardar */}
+              <button type="submit" className="btn btn-primary" disabled={guardando}>
+                {guardando ? 'Guardando...' : 'Confirmar turno'}
+              </button>
             </div>
-            <div className="form-group">
-              <label>Motivo de la consulta</label>
-              <input
-                placeholder="Ej: Limpieza, control, dolor..."
-                value={form.motivo}
-                onChange={campo('motivo')}
-              />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
-            <button className="btn btn-secondary" onClick={() => setModal(false)}>
-              Cancelar
-            </button>
-            <button className="btn btn-primary" onClick={confirmarTurno} disabled={guardando}>
-              {guardando ? 'Guardando...' : 'Confirmar turno'}
-            </button>
-          </div>
+          </form>
         </Modal>
       )}
     </div>

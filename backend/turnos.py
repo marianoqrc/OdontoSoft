@@ -2,6 +2,7 @@ import os
 from datetime import datetime, date, timedelta
 from openpyxl import Workbook, load_workbook
 from config import DATA_DIR
+import pacientes as pac
 
 TURNOS_FILE = os.path.join(DATA_DIR, '_turnos.xlsx')
 
@@ -105,11 +106,16 @@ def get_disponibilidad(fecha_str, turno="manana"):
 
 def get_timeline(fecha_str, turno="manana"):
     """
-    Devuelve el timeline del día consolidando bloques ocupados y libres.
+    Devuelve el timeline del día consolidando bloques ocupados y libres,
+    incluyendo el teléfono del paciente.
     """
     modulos = MODULOS_MANANA if turno == "manana" else MODULOS_TARDE
     hora_fin_str = HORA_MANANA_FIN if turno == "manana" else HORA_TARDE_FIN
     ocupados = leer_por_fecha(fecha_str)
+    
+    # NUEVO: Obtenemos todos los pacientes para cruzar datos
+    lista_pacientes = pac.listar_pacientes()
+    mapa_pacientes = {str(p.get("dni")): p.get("telefono", "") for p in lista_pacientes}
 
     # Turnos del período
     inicio_periodo = hora_a_mins(modulos[0])
@@ -119,6 +125,12 @@ def get_timeline(fecha_str, turno="manana"):
     for t in ocupados:
         inicio = hora_a_mins(str(t["hora_inicio"]))
         fin    = hora_a_mins(str(t["hora_fin"]))
+        
+        # NUEVO: Agregamos el teléfono al turno cruzando por DNI
+        dni_paciente = str(t.get("dni_paciente", ""))
+        telefono = mapa_pacientes.get(dni_paciente, "")
+        t["telefono_paciente"] = telefono
+        
         if inicio >= inicio_periodo and fin <= fin_periodo:
             turnos_periodo.append({
                 **t,

@@ -49,8 +49,9 @@ export default function Pacientes() {
 
   // ── Guardar (crear o editar) ───────────────────────────────────────────────
   async function guardar() {
-    if (!form.nombre || !form.apellido || !form.dni) {
-      setToast({ msg: 'Nombre, apellido y DNI son obligatorios', type: 'error' })
+    if (!form.nombre || !form.apellido || !form.dni || !form.telefono) {
+      setToast({ msg: 'Nombre, apellido, DNI y Teléfono son obligatorios', type: 'error' })
+      return
       return
     }
     setCargando(true)
@@ -175,67 +176,72 @@ export default function Pacientes() {
         </table>
       </div>
 
-      {/* Modal formulario */}
+{/* Modal formulario */}
       {modal && (
         <Modal
           title={editando ? 'Editar paciente' : 'Nuevo paciente'}
           onClose={() => setModal(false)}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="grid-2">
-              <div className="form-group">
-                <label>Apellido *</label>
-                <input value={form.apellido} onChange={campo('apellido')} />
+          {/* NUEVO: Envolvemos todo en un form para habilitar el "Enter" */}
+          <form onSubmit={(e) => { e.preventDefault(); guardar(); }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>Apellido *</label>
+                  <input value={form.apellido} onChange={campo('apellido')} autoFocus />
+                </div>
+                <div className="form-group">
+                  <label>Nombre *</label>
+                  <input value={form.nombre} onChange={campo('nombre')} />
+                </div>
+              </div>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>DNI *</label>
+                  <input value={form.dni} onChange={campo('dni')} disabled={!!editando} />
+                </div>
+                <div className="form-group">
+                  <label>Fecha de nacimiento</label>
+                  <input type="date" value={form.fecha_nacimiento} onChange={campo('fecha_nacimiento')} />
+                </div>
+              </div>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>Teléfono (WhatsApp) *</label>
+                  <input value={form.telefono} onChange={campo('telefono')} placeholder="Ej: 3814123456" />
+                </div>
+                <div className="form-group">
+                  <label>Email</label>
+                  <input type="email" value={form.email} onChange={campo('email')} />
+                </div>
+              </div>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>Obra social</label>
+                  <input value={form.obra_social} onChange={campo('obra_social')} />
+                </div>
+                <div className="form-group">
+                  <label>Nº afiliado</label>
+                  <input value={form.nro_afiliado} onChange={campo('nro_afiliado')} />
+                </div>
               </div>
               <div className="form-group">
-                <label>Nombre *</label>
-                <input value={form.nombre} onChange={campo('nombre')} />
+                <label>Alergias / Notas médicas</label>
+                <textarea rows={2} value={form.alergias} onChange={campo('alergias')} />
               </div>
             </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label>DNI *</label>
-                <input value={form.dni} onChange={campo('dni')} disabled={!!editando} />
-              </div>
-              <div className="form-group">
-                <label>Fecha de nacimiento</label>
-                <input type="date" value={form.fecha_nacimiento} onChange={campo('fecha_nacimiento')} />
-              </div>
-            </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label>Teléfono</label>
-                <input value={form.telefono} onChange={campo('telefono')} />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input type="email" value={form.email} onChange={campo('email')} />
-              </div>
-            </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label>Obra social</label>
-                <input value={form.obra_social} onChange={campo('obra_social')} />
-              </div>
-              <div className="form-group">
-                <label>Nº afiliado</label>
-                <input value={form.nro_afiliado} onChange={campo('nro_afiliado')} />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Alergias / Notas médicas</label>
-              <textarea rows={2} value={form.alergias} onChange={campo('alergias')} />
-            </div>
-          </div>
 
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
-            <button className="btn btn-secondary" onClick={() => setModal(false)}>
-              Cancelar
-            </button>
-            <button className="btn btn-primary" onClick={guardar} disabled={cargando}>
-              {cargando ? 'Guardando...' : editando ? 'Actualizar' : 'Registrar'}
-            </button>
-          </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
+              {/* IMPORTANTE: type="button" para que no dispare el form */}
+              <button type="button" className="btn btn-secondary" onClick={() => setModal(false)}>
+                Cancelar
+              </button>
+              {/* IMPORTANTE: type="submit" para que escuche el Enter */}
+              <button type="submit" className="btn btn-primary" disabled={cargando}>
+                {cargando ? 'Guardando...' : editando ? 'Actualizar' : 'Registrar'}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react'
 import { format, addDays, subDays, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Modal from '../../components/Modal.jsx' 
@@ -34,6 +34,36 @@ export default function Agenda({ onVolver }) {
   }, [dia, turno])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // --- FUNCIONES DE WHATSAPP ---
+  const abrirWhatsApp = (e, telefono) => {
+    e.stopPropagation() // Evita que se abra el modal de editar
+    if (!telefono) {
+      alert("Este paciente no tiene un teléfono registrado.")
+      return
+    }
+    // Limpiamos el número por si tiene espacios o guiones
+    const numLimpio = String(telefono).replace(/[^0-9]/g, '')
+    window.open(`https://wa.me/${numLimpio}`, '_blank')
+  }
+
+  const abrirRecordatorioTurno = (e, turnoData) => {
+    e.stopPropagation() // Evita que se abra el modal de editar
+    if (!turnoData.telefono_paciente) {
+      alert("Este paciente no tiene un teléfono registrado.")
+      return
+    }
+    
+    const numLimpio = String(turnoData.telefono_paciente).replace(/[^0-9]/g, '')
+    const fechaStr = format(dia, "EEEE d 'de' MMMM", { locale: es })
+    
+    // Armamos el texto y lo codificamos para la URL
+    const mensajeBase = `Hola *${turnoData.nombre_paciente}*, te recordamos tu turno de Odontología el día *${fechaStr}* a las *${turnoData.hora_inicio} hs*. Por favor confirmar asistencia.`
+    const mensajeEncoded = encodeURIComponent(mensajeBase)
+    
+    window.open(`https://wa.me/${numLimpio}?text=${mensajeEncoded}`, '_blank')
+  }
+  // -----------------------------
 
   async function eliminarTurno() {
     if (!turnoSeleccionado || !turnoSeleccionado.id) {
@@ -228,15 +258,52 @@ export default function Agenda({ onVolver }) {
                 </div>
 
                 {bloque.tipo === 'ocupado' && bloque.turno ? (
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>
-                      {bloque.turno.nombre_paciente}
-                    </div>
-                    {bloque.turno.motivo && (
-                      <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
-                        {bloque.turno.motivo}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                    {/* INFO PACIENTE */}
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>
+                        {bloque.turno.nombre_paciente}
                       </div>
-                    )}
+                      {bloque.turno.motivo && (
+                        <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                          {bloque.turno.motivo}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* BOTONES WHATSAPP */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button 
+                        className="btn btn-secondary btn-sm"
+                        title="Abrir chat en WhatsApp"
+                        onClick={(e) => abrirWhatsApp(e, bloque.turno.telefono_paciente)}
+                        style={{ 
+                          padding: '4px 8px', 
+                          color: '#16a34a', 
+                          borderColor: '#bbf7d0', 
+                          background: '#f0fdf4',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <MessageCircle size={15} />
+                      </button>
+
+                      <button 
+                        className="btn btn-secondary btn-sm"
+                        onClick={(e) => abrirRecordatorioTurno(e, bloque.turno)}
+                        style={{ 
+                          fontSize: 12, 
+                          fontWeight: 600,
+                          color: '#16a34a', 
+                          borderColor: '#bbf7d0', 
+                          background: '#f0fdf4' 
+                        }}
+                      >
+                        Recordar turno
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div style={{ fontSize: 12.5, color: 'var(--accent)', fontWeight: 500 }}>
@@ -249,82 +316,87 @@ export default function Agenda({ onVolver }) {
         </div>
       </div>
 
-      {/* MODAL DE GESTIÓN DE TURNO */}
+{/* MODAL DE GESTIÓN DE TURNO */}
       {turnoSeleccionado && (
         <Modal
           title={`Gestión de Turno`}
           onClose={() => setTurnoSeleccionado(null)}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            
-            {/* Información estática del turno */}
-            <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Horario:</div>
-              <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--primary)' }}>
-                {turnoSeleccionado.hora_inicio} — {turnoSeleccionado.hora_fin}
-              </div>
-            </div>
-
-            {/* Formulario Editable */}
-            <div className="form-group">
-              <label>Paciente</label>
-              <input 
-                type="text" 
-                value={turnoSeleccionado.nombre_paciente || ''} 
-                onChange={(e) => setTurnoSeleccionado({...turnoSeleccionado, nombre_paciente: e.target.value})}
-                style={{ background: '#fff', border: '1px solid var(--border)', padding: '8px', borderRadius: '4px', width: '100%' }}
-              />
-            </div>
-            
-            <div className="form-group">
-              <label>Motivo</label>
-              <input 
-                type="text" 
-                value={turnoSeleccionado.motivo || ''} 
-                onChange={(e) => setTurnoSeleccionado({...turnoSeleccionado, motivo: e.target.value})}
-                style={{ background: '#fff', border: '1px solid var(--border)', padding: '8px', borderRadius: '4px', width: '100%' }}
-              />
-            </div>
-
-            {/* Zona de Peligro / Acciones */}
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              marginTop: 10,
-              paddingTop: 16,
-              borderTop: '1px solid var(--border)'
-            }}>
+          {/* NUEVO: Formulario para el Enter */}
+          <form onSubmit={(e) => { e.preventDefault(); guardarCambios(); }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               
-              <button 
-                className="btn" 
-                style={{ background: '#fee2e2', color: '#dc2626', border: 'none', fontWeight: 600 }}
-                onClick={eliminarTurno}
-              >
-                Eliminar Turno
-              </button>
+              <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Horario:</div>
+                <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--primary)' }}>
+                  {turnoSeleccionado.hora_inicio} — {turnoSeleccionado.hora_fin}
+                </div>
+              </div>
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="form-group">
+                <label>Paciente</label>
+                <input 
+                  type="text" 
+                  value={turnoSeleccionado.nombre_paciente || ''} 
+                  onChange={(e) => setTurnoSeleccionado({...turnoSeleccionado, nombre_paciente: e.target.value})}
+                  style={{ background: '#fff', border: '1px solid var(--border)', padding: '8px', borderRadius: '4px', width: '100%' }}
+                  autoFocus
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Motivo</label>
+                <input 
+                  type="text" 
+                  value={turnoSeleccionado.motivo || ''} 
+                  onChange={(e) => setTurnoSeleccionado({...turnoSeleccionado, motivo: e.target.value})}
+                  style={{ background: '#fff', border: '1px solid var(--border)', padding: '8px', borderRadius: '4px', width: '100%' }}
+                />
+              </div>
+
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginTop: 10,
+                paddingTop: 16,
+                borderTop: '1px solid var(--border)'
+              }}>
+                
+                {/* Ojo acá: type="button" para que Eliminar no dispare el Enter por accidente */}
                 <button 
-                  className="btn btn-secondary" 
-                  onClick={() => setTurnoSeleccionado(null)}
+                  type="button"
+                  className="btn" 
+                  style={{ background: '#fee2e2', color: '#dc2626', border: 'none', fontWeight: 600 }}
+                  onClick={eliminarTurno}
                 >
-                  Cerrar
+                  Eliminar Turno
                 </button>
-                <button 
-                  className="btn btn-primary"
-                  onClick={guardarCambios}
-                >
-                  Guardar Cambios
-                </button>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {/* type="button" para Cerrar */}
+                  <button 
+                    type="button"
+                    className="btn btn-secondary" 
+                    onClick={() => setTurnoSeleccionado(null)}
+                  >
+                    Cerrar
+                  </button>
+                  {/* type="submit" para Guardar Cambios */}
+                  <button 
+                    type="submit"
+                    className="btn btn-primary"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+
               </div>
 
             </div>
-
-          </div>
+          </form>
         </Modal>
       )}
-
     </div>
   )
 }

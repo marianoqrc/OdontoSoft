@@ -72,6 +72,11 @@ def guardar_paciente(datos):
     dni = datos.get("dni")
     if not dni:
         raise ValueError("El DNI es obligatorio")
+        
+    # NUEVA VALIDACIÓN: El teléfono ahora es obligatorio
+    telefono = datos.get("telefono")
+    if not telefono or str(telefono).strip() == "":
+        raise ValueError("El teléfono es obligatorio para enviar recordatorios por WhatsApp")
 
     ruta = get_ruta_paciente(dni)
 
@@ -104,7 +109,7 @@ def guardar_paciente(datos):
             f"El archivo del paciente está abierto en Excel. "
             f"Cerralo y volvé a intentar."
         )
-
+    
 def dar_de_baja(dni):
     if not dni or dni == "null":
         return {"ok": False, "error": "DNI inválido"}
