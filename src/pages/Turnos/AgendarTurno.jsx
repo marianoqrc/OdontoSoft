@@ -176,7 +176,6 @@ export default function AgendarTurno({ onVolver }) {
           <button className="btn btn-secondary btn-sm" onClick={onVolver}>
             <ArrowLeft size={14} /> Volver
           </button>
-          {/* Header Unificado: Título y Fecha en una sola línea y en negrita */}
           <div className="page-title" style={{ fontWeight: 600 }}>
             Agendar turno - {' '}
             {format(dia, "EEEE d 'de' MMMM yyyy", { locale: es })}
@@ -196,15 +195,12 @@ export default function AgendarTurno({ onVolver }) {
             disabled={isToday(dia)}
             style={{
               minWidth: '100px',
-              // Centrado de texto explícito
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              // Formato solicitado: SIN COLOR AZUL. Mantener color por defecto.
               color: isToday(dia) ? 'var(--text2)' : 'inherit', 
               borderColor: 'var(--border)',
               background: 'var(--surface)',
-              // Solo cambiamos peso de fuente para mostrar estado
               fontWeight: isToday(dia) ? 600 : 400,
               cursor: isToday(dia) ? 'default' : 'pointer',
               transition: 'all 0.2s'
@@ -234,7 +230,7 @@ export default function AgendarTurno({ onVolver }) {
                 transition: 'all .15s',
               }}
             >
-              {t === 'manana' ? '☀️ Mañana' : '🌙 Tarde'}
+              {t === 'manana' ? 'Mañana' : 'Tarde'}
             </button>
           ))}
         </div>
@@ -272,17 +268,17 @@ export default function AgendarTurno({ onVolver }) {
                   padding: '10px 8px',
                   borderRadius: 6,
                   border: `2px solid ${
-                    esInicio ? '#f59e0b' :
-                    enRango ? '#2563eb' : '#d1d5db'
+                    esInicio ? 'var(--primary)' :
+                    enRango ? 'var(--primary)' : 'var(--border)'
                   }`,
                   background:
-                    esInicio ? '#fef3c7' :
-                    enRango ? '#2563eb' :
-                    ocupado ? '#f3f4f6' : '#fff',
+                    esInicio ? 'var(--primary-light)' :
+                    enRango ? 'var(--primary)' :
+                    ocupado ? 'var(--surface2)' : 'var(--surface)',
                   color:
-                    esInicio ? '#92400e' :
+                    esInicio ? 'var(--primary-dark)' :
                     enRango ? '#fff' :
-                    ocupado ? '#9ca3af' : '#111',
+                    ocupado ? 'var(--text3)' : 'var(--text)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: ocupado ? 'not-allowed' : 'pointer',
@@ -303,12 +299,12 @@ export default function AgendarTurno({ onVolver }) {
       {seleccionados.length > 1 && rango && !inicioSelec && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 20px', background: '#eff6ff',
-          borderRadius: 8, border: '1px solid #2563eb', marginBottom: 16
+          padding: '14px 20px', background: 'var(--primary-light)',
+          borderRadius: 8, border: '1px solid var(--primary)', marginBottom: 16
         }}>
-          <div style={{ fontSize: 13 }}>
+          <div style={{ fontSize: 13, color: 'var(--text)' }}>
             <strong>{rango.inicio} — {rango.fin}</strong>
-            <span style={{ color: '#64748b', marginLeft: 8 }}>
+            <span style={{ color: 'var(--text2)', marginLeft: 8 }}>
               ({seleccionados.length * 15} minutos)
             </span>
           </div>
@@ -334,7 +330,6 @@ export default function AgendarTurno({ onVolver }) {
           title={`Nuevo turno — ${format(dia, 'd/MM/yyyy')} de ${rango.inicio} a ${rango.fin}`}
           onClose={() => setModal(false)}
         >
-          {/* NUEVO: Envolvemos en un formulario para el Enter */}
           <form onSubmit={(e) => { e.preventDefault(); confirmarTurno(); }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="form-group">
@@ -366,11 +361,9 @@ export default function AgendarTurno({ onVolver }) {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
-              {/* type="button" para Cancelar */}
               <button type="button" className="btn btn-secondary" onClick={() => setModal(false)}>
                 Cancelar
               </button>
-              {/* type="submit" para Guardar */}
               <button type="submit" className="btn btn-primary" disabled={guardando}>
                 {guardando ? 'Guardando...' : 'Confirmar turno'}
               </button>

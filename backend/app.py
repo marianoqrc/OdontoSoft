@@ -6,6 +6,10 @@ import historia as hist
 import exportacion as exp
 from datetime import datetime
 import turnos as tur
+import shutil
+from flask import send_file as flask_send_file
+import json
+import os
 
 #D:\soft\odontosoft\backend> d:\soft\odontosoft\backend\.venv\Scripts\python.exe app.py
 
@@ -67,8 +71,39 @@ def get_historia(dni):
 @app.route("/historia/<dni>", methods=["POST"])
 def post_evento(dni):
     try:
-        evento = request.get_json()
+        import json
+        from werkzeug.utils import secure_filename
+
+        # Leer datos del FormData
+        procedimiento = request.form.get('procedimiento', '')
+        descripcion   = request.form.get('descripcion', '')
+        piezas_raw    = request.form.get('piezas', '[]')
+        piezas        = json.loads(piezas_raw)
+
+        evento = {
+            'procedimiento': procedimiento,
+            'descripcion':   descripcion,
+            'piezas':        piezas,
+        }
+
         resultado = hist.agregar_evento(dni, evento)
+
+        # Subir archivos adjuntos si los hay
+        archivos = request.files.getlist('archivos')
+        if archivos and resultado.get('id_adjunto'):
+            id_adjunto = resultado['id_adjunto']
+            from config import DATA_DIR
+            carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+            os.makedirs(carpeta, exist_ok=True)
+            for archivo in archivos:
+                if archivo.filename:
+                    nombre = secure_filename(archivo.filename)
+                    archivo.save(os.path.join(carpeta, nombre))
+
+        #resultado = hist.agregar_evento(dni, evento)
+        print("Resultado agregar_evento:", resultado)  # agregar
+        print("Archivos recibidos:", request.files.getlist('archivos'))  # agregar
+
         return jsonify(resultado), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 423
@@ -152,6 +187,57 @@ def modificar_turno(turno_id):
         return jsonify({"error": str(e)}), 423
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/adjuntos/<dni>/<id_adjunto>", methods=["GET"])
+def listar_adjuntos(dni, id_adjunto):
+    from config import DATA_DIR
+    carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+    if not os.path.exists(carpeta):
+        return jsonify([])
+    archivos = []
+    for f in os.listdir(carpeta):
+        ruta = os.path.join(carpeta, f)
+        if os.path.isfile(ruta):
+            archivos.append({
+                "nombre": f,
+                "tamanio": os.path.getsize(ruta),
+            })
+    return jsonify(archivos)
+
+@app.route("/adjuntos/<dni>/<id_adjunto>", methods=["POST"])
+def subir_adjunto(dni, id_adjunto):
+    from config import DATA_DIR
+    from werkzeug.utils import secure_filename
+    if 'archivo' not in request.files:
+        return jsonify({"error": "No se envió ningún archivo"}), 400
+    archivo = request.files['archivo']
+    if archivo.filename == '':
+        return jsonify({"error": "Nombre de archivo vacío"}), 400
+    carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+    os.makedirs(carpeta, exist_ok=True)
+    nombre = secure_filename(archivo.filename)
+    archivo.save(os.path.join(carpeta, nombre))
+    return jsonify({"ok": True, "nombre": nombre}), 201
+
+@app.route("/adjuntos/<dni>/<id_adjunto>/<nombre>", methods=["GET"])
+def descargar_adjunto(dni, id_adjunto, nombre):
+    from config import DATA_DIR
+    from werkzeug.utils import secure_filename
+    carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+    ruta = os.path.join(carpeta, secure_filename(nombre))
+    if not os.path.exists(ruta):
+        return jsonify({"error": "Archivo no encontrado"}), 404
+    return flask_send_file(ruta, as_attachment=False)
+
+@app.route("/adjuntos/<dni>/<id_adjunto>/<nombre>", methods=["DELETE"])
+def eliminar_adjunto(dni, id_adjunto, nombre):
+    from config import DATA_DIR
+    from werkzeug.utils import secure_filename
+    carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+    ruta = os.path.join(carpeta, secure_filename(nombre))
+    if os.path.exists(ruta):
+        os.remove(ruta)
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     app.run(port=5050, debug=True)

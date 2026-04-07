@@ -19,7 +19,7 @@ def crear_workbook_nuevo():
     ])
     ws_historia = wb.create_sheet("Historia")
     ws_historia.append([
-        "fecha", "piezas", "procedimiento", "descripcion", "profesional"
+        "fecha", "piezas", "procedimiento", "descripcion", "profesional", "id_adjunto"
     ])
     return wb
 
