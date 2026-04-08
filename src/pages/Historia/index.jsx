@@ -371,6 +371,7 @@ export default function Historia() {
               seleccionadas={[]}
               onToggleSeccion={() => {}}
               onSetSeleccionadas={() => {}}
+              soloLectura={true}
             />
           </div>
           <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 16, background: 'var(--surface2)', padding: 12, borderRadius: 8 }}>

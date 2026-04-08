@@ -157,6 +157,7 @@ export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, sele
   };
 
   const renderSelectorModo = () => {
+    // ESTA ES LA CLAVE: Si es solo lectura, devolvemos null (nada) para que no dibuje los botones
     if (soloLectura) return null; 
     
     return (
@@ -197,12 +198,16 @@ export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, sele
     ))
   );
 
+  // ESTA ES LA OTRA CLAVE: Definimos los cuadrantes visibles SOLO si NO estamos en soloLectura
   const cuadrantesVisibles = [];
-  if (modo === 'ADULTO' || modo === 'MIXTO') cuadrantesVisibles.push('Q1', 'Q2', 'Q4', 'Q3');
-  if (modo === 'NINO' || modo === 'MIXTO') cuadrantesVisibles.push('Q5', 'Q6', 'Q8', 'Q7');
+  if (!soloLectura) {
+    if (modo === 'ADULTO' || modo === 'MIXTO') cuadrantesVisibles.push('Q1', 'Q2', 'Q4', 'Q3');
+    if (modo === 'NINO' || modo === 'MIXTO') cuadrantesVisibles.push('Q5', 'Q6', 'Q8', 'Q7');
+  }
 
   return (
     <div>
+      {/* 1. Llama al selector de modo (si es soloLectura, renderiza null) */}
       {renderSelectorModo()}
       
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', justifyContent: 'center', overflowX: 'auto', paddingBottom: '10px' }}>
@@ -230,6 +235,7 @@ export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, sele
           )}
         </svg>
 
+        {/* 2. Llama al panel de Atajos SOLO si NO es soloLectura */}
         {!soloLectura && (
           <div style={{
             display: 'flex', flexDirection: 'column', gap: 8,
