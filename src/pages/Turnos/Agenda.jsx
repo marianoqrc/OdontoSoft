@@ -180,7 +180,7 @@ export default function Agenda({ onVolver }) {
                 transition: 'all .15s',
               }}
             >
-              {t === 'manana' ? '☀️ Mañana' : '🌙 Tarde'}
+              {t === 'manana' ? 'Mañana' : 'Tarde'}
             </button>
           ))}
         </div>

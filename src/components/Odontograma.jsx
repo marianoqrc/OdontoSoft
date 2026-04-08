@@ -1,3 +1,5 @@
+import React, { useState } from 'react';
+
 const COLORES = {
   sano:                { fill: '#ffffff', stroke: '#94a3b8', label: 'Sano' },
   caries:              { fill: '#fecaca', stroke: '#dc2626', label: 'Caries' },
@@ -10,57 +12,32 @@ const COLORES = {
   extraccion_indicada: { fill: '#fef08a', stroke: '#ca8a04', label: 'Extracción ind.' },
 }
 
-const CUADRANTES = {
+const CUADRANTES_ADULTO = {
   Q1: [18,17,16,15,14,13,12,11],
   Q2: [21,22,23,24,25,26,27,28],
   Q3: [31,32,33,34,35,36,37,38],
   Q4: [41,42,43,44,45,46,47,48],
 }
 
-const SUPERIORES = [...CUADRANTES.Q1, ...CUADRANTES.Q2]
-const INFERIORES = [
-  48,47,46,45,44,43,42,41,
-  31,32,33,34,35,36,37,38
-]
-const TODAS = [...SUPERIORES, ...INFERIORES]
-
-function Pieza({ fdi, estado = 'sano', seleccionada, onClick }) {
-  const { fill, stroke } = COLORES[estado] || COLORES.sano
-  const esMolar = [6, 7, 8].includes(fdi % 10)
-  const w = esMolar ? 26 : 20
-  const h = esMolar ? 26 : 20
-
-  return (
-    <g onClick={() => onClick(fdi)} style={{ cursor: 'pointer' }}>
-      <rect
-        x={-w/2} y={-h/2} width={w} height={h}
-        rx={esMolar ? 4 : 10}
-        fill={fill}
-        stroke={seleccionada ? '#f59e0b' : stroke}
-        strokeWidth={seleccionada ? 2.5 : 1.5}
-        style={{ transition: 'stroke .1s' }}
-      />
-      {estado === 'ausente' && <>
-        <line x1={-6} y1={-6} x2={6} y2={6} stroke={stroke} strokeWidth={1.5}/>
-        <line x1={6} y1={-6} x2={-6} y2={6} stroke={stroke} strokeWidth={1.5}/>
-      </>}
-      <text textAnchor="middle" y={h/2+12} fontSize={8} fill="#64748b" fontFamily="system-ui">
-        {fdi}
-      </text>
-    </g>
-  )
+const CUADRANTES_NINO = {
+  Q5: [55,54,53,52,51],
+  Q6: [61,62,63,64,65],
+  Q7: [71,72,73,74,75],
+  Q8: [85,84,83,82,81],
 }
+
+const SECCIONES = ['C', 'T', 'B', 'L', 'R'];
 
 function BtnAtajo({ label, onClick, activo }) {
   return (
     <button
       onClick={onClick}
       style={{
-        padding: '5px 10px',
+        padding: '6px 12px',
         borderRadius: 5,
-        border: `1.5px solid ${activo ? '#f59e0b' : 'var(--border)'}`,
-        background: activo ? '#fef3c7' : 'var(--surface)',
-        color: activo ? '#92400e' : 'var(--text2)',
+        border: `1.5px solid ${activo ? '#d4a5a5' : 'var(--border)'}`,
+        background: activo ? '#fcf6f6' : 'var(--surface)',
+        color: activo ? '#c49090' : 'var(--text2)',
         fontSize: 12,
         fontWeight: 600,
         cursor: 'pointer',
@@ -73,104 +50,219 @@ function BtnAtajo({ label, onClick, activo }) {
   )
 }
 
-export default function Odontograma({ estados = {}, seleccionadas = [], onToggle, onSetSeleccionadas }) {
-  const GAP = 30
-  const xPos = (i) => 18 + i * GAP
+function Pieza({ fdi, estados = {}, seleccionadas = [], onClickPieza }) {
+  const isSelected = (seccion) => seleccionadas.includes(`${fdi}-${seccion}`);
+  
+  const getColor = (seccion) => {
+    if (isSelected(seccion)) return { fill: '#fef3c7', stroke: '#f59e0b' }; 
+    const nombreEstado = estados[`${fdi}-${seccion}`] || 'sano';
+    return COLORES[nombreEstado] || COLORES.sano;
+  };
 
-  // Chequear si un cuadrante está completamente seleccionado
-  function cuadranteActivo(q) {
-    return CUADRANTES[q].every(p => seleccionadas.includes(p))
-  }
+  return (
+    <g transform="translate(0,0)">
+      {/* Top */}
+      <path 
+        d="M -10,-14 L 10,-14 A 14,14 0 0,1 14,-10 L 7,-7 L -7,-7 L -14,-10 A 14,14 0 0,1 -10,-14 Z" 
+        fill={getColor('T').fill} stroke={getColor('T').stroke} strokeWidth="1.5"
+        onClick={() => onClickPieza && onClickPieza(fdi, 'T')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
+      />
+      {/* Bottom */}
+      <path 
+        d="M -10,14 L 10,14 A 14,14 0 0,0 14,10 L 7,7 L -7,7 L -14,10 A 14,14 0 0,0 -10,14 Z" 
+        fill={getColor('B').fill} stroke={getColor('B').stroke} strokeWidth="1.5"
+        onClick={() => onClickPieza && onClickPieza(fdi, 'B')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
+      />
+      {/* Left */}
+      <path 
+        d="M -14,-10 A 14,14 0 0,0 -14,10 L -7,7 L -7,-7 Z" 
+        fill={getColor('L').fill} stroke={getColor('L').stroke} strokeWidth="1.5"
+        onClick={() => onClickPieza && onClickPieza(fdi, 'L')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
+      />
+      {/* Right */}
+      <path 
+        d="M 14,-10 A 14,14 0 0,1 14,10 L 7,7 L 7,-7 Z" 
+        fill={getColor('R').fill} stroke={getColor('R').stroke} strokeWidth="1.5"
+        onClick={() => onClickPieza && onClickPieza(fdi, 'R')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
+      />
+      {/* Center */}
+      <rect 
+        x="-7" y="-7" width="14" height="14" 
+        fill={getColor('C').fill} stroke={getColor('C').stroke} strokeWidth="1.5"
+        onClick={() => onClickPieza && onClickPieza(fdi, 'C')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
+      />
+      
+      <text textAnchor="middle" y={30} fontSize={11} fill="#475569" fontWeight="600" fontFamily="system-ui">
+        {fdi}
+      </text>
+    </g>
+  )
+}
 
-  function toggleCuadrante(q) {
-    const piezas = CUADRANTES[q]
+export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, seleccionadas = [], onToggleSeccion, onSetSeleccionadas, soloLectura = false }) {
+  const [modo, setModo] = useState(modoInicial);
+
+  const handleClickPieza = (fdi, seccion) => {
+    if (!soloLectura && onToggleSeccion) {
+      onToggleSeccion(`${fdi}-${seccion}`);
+    }
+  };
+
+  const obtenerTodasLasCaras = (arrayPiezas) => {
+    let caras = [];
+    arrayPiezas.forEach(fdi => {
+      SECCIONES.forEach(sec => caras.push(`${fdi}-${sec}`));
+    });
+    return caras;
+  };
+
+  const getPiezasActivas = () => {
+    let activas = [];
+    if (modo === 'ADULTO' || modo === 'MIXTO') {
+      activas = [...activas, ...CUADRANTES_ADULTO.Q1, ...CUADRANTES_ADULTO.Q2, ...CUADRANTES_ADULTO.Q3, ...CUADRANTES_ADULTO.Q4];
+    }
+    if (modo === 'NINO' || modo === 'MIXTO') {
+      activas = [...activas, ...CUADRANTES_NINO.Q5, ...CUADRANTES_NINO.Q6, ...CUADRANTES_NINO.Q7, ...CUADRANTES_NINO.Q8];
+    }
+    return activas;
+  };
+
+  const cuadranteActivo = (q) => {
+    const map = { ...CUADRANTES_ADULTO, ...CUADRANTES_NINO };
+    const carasCuadrante = obtenerTodasLasCaras(map[q]);
+    return carasCuadrante.every(cara => seleccionadas.includes(cara));
+  };
+
+  const toggleCuadrante = (q) => {
+    if (soloLectura) return;
+    const map = { ...CUADRANTES_ADULTO, ...CUADRANTES_NINO };
+    const carasCuadrante = obtenerTodasLasCaras(map[q]);
+    
     if (cuadranteActivo(q)) {
-      // Deseleccionar todo el cuadrante
-      onSetSeleccionadas(seleccionadas.filter(p => !piezas.includes(p)))
+      onSetSeleccionadas(seleccionadas.filter(p => !carasCuadrante.includes(p)));
     } else {
-      // Agregar las piezas del cuadrante que no estén ya seleccionadas
-      const nuevas = piezas.filter(p => !seleccionadas.includes(p))
-      onSetSeleccionadas([...seleccionadas, ...nuevas])
+      const nuevas = carasCuadrante.filter(p => !seleccionadas.includes(p));
+      onSetSeleccionadas([...seleccionadas, ...nuevas]);
     }
-  }
+  };
 
-  function seleccionarTodo() {
-    if (seleccionadas.length === TODAS.length) {
-      onSetSeleccionadas([])
+  const seleccionarTodo = () => {
+    if (soloLectura) return;
+    const todasLasCaras = obtenerTodasLasCaras(getPiezasActivas());
+    if (seleccionadas.length === todasLasCaras.length) {
+      onSetSeleccionadas([]);
     } else {
-      onSetSeleccionadas([...TODAS])
+      onSetSeleccionadas(todasLasCaras);
     }
-  }
+  };
+
+  const renderSelectorModo = () => {
+    if (soloLectura) return null; 
+    
+    return (
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', justifyContent: 'center' }}>
+        {['ADULTO', 'NINO', 'MIXTO'].map(m => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => { setModo(m); onSetSeleccionadas([]); }} 
+            style={{
+              padding: '6px 16px',
+              borderRadius: '20px',
+              border: `1px solid ${modo === m ? '#d4a5a5' : 'var(--border)'}`,
+              background: modo === m ? '#fcf6f6' : 'var(--surface)',
+              color: modo === m ? '#c49090' : 'var(--text2)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            {m === 'ADULTO' ? 'Adulto' : m === 'NINO' ? 'Niño (Temporal)' : 'Mixto'}
+          </button>
+        ))}
+      </div>
+    )
+  };
+
+  const dibujarFila = (piezas, startX, y, gap) => (
+    piezas.map((fdi, i) => (
+      <g key={fdi} transform={`translate(${startX + (i * gap)}, ${y})`}>
+        <Pieza 
+          fdi={fdi} 
+          estados={estados}
+          seleccionadas={seleccionadas}
+          onClickPieza={soloLectura ? undefined : handleClickPieza}
+        />
+      </g>
+    ))
+  );
+
+  const cuadrantesVisibles = [];
+  if (modo === 'ADULTO' || modo === 'MIXTO') cuadrantesVisibles.push('Q1', 'Q2', 'Q4', 'Q3');
+  if (modo === 'NINO' || modo === 'MIXTO') cuadrantesVisibles.push('Q5', 'Q6', 'Q8', 'Q7');
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', justifyContent: 'center' }}>
+      {renderSelectorModo()}
+      
+      <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', justifyContent: 'center', overflowX: 'auto', paddingBottom: '10px' }}>
+        
+        <svg viewBox="0 0 700 320" style={{ width: '100%', maxWidth: 800 }}>
+          <line x1="350" y1="10" x2="350" y2="310" stroke="#cbd5e1" strokeWidth={1} strokeDasharray="4,4"/>
+          <line x1="10" y1="160" x2="690" y2="160" stroke="#cbd5e1" strokeWidth={1} strokeDasharray="4,4"/>
 
-        {/* SVG Odontograma */}
-        <svg viewBox="0 0 490 200" style={{ width: '100%', maxWidth: 490, display: 'block' }}>
-          <line x1="245" y1="8" x2="245" y2="192" stroke="#e2e8f0" strokeWidth={1} strokeDasharray="3,3"/>
-          <line x1="8" y1="100" x2="482" y2="100" stroke="#e2e8f0" strokeWidth={1} strokeDasharray="3,3"/>
+          {(modo === 'ADULTO' || modo === 'MIXTO') && (
+            <>
+              {dibujarFila(CUADRANTES_ADULTO.Q1, 30, 50, 42)}
+              {dibujarFila(CUADRANTES_ADULTO.Q2, 376, 50, 42)}
+              {dibujarFila(CUADRANTES_ADULTO.Q4, 30, 260, 42)}
+              {dibujarFila(CUADRANTES_ADULTO.Q3, 376, 260, 42)}
+            </>
+          )}
 
-          <text x={12} y={20} fontSize={9} fill="#94a3b8" fontFamily="system-ui">Q1</text>
-          <text x={454} y={20} fontSize={9} fill="#94a3b8" fontFamily="system-ui">Q2</text>
-          <text x={12} y={195} fontSize={9} fill="#94a3b8" fontFamily="system-ui">Q4</text>
-          <text x={454} y={195} fontSize={9} fill="#94a3b8" fontFamily="system-ui">Q3</text>
-
-          {SUPERIORES.map((fdi, i) => (
-            <g key={fdi} transform={`translate(${xPos(i)}, 60)`}>
-              <Pieza fdi={fdi} estado={estados[fdi] || 'sano'}
-                seleccionada={seleccionadas.includes(fdi)} onClick={onToggle}/>
-            </g>
-          ))}
-          {INFERIORES.map((fdi, i) => (
-            <g key={fdi} transform={`translate(${xPos(i)}, 140)`}>
-              <Pieza fdi={fdi} estado={estados[fdi] || 'sano'}
-                seleccionada={seleccionadas.includes(fdi)} onClick={onToggle}/>
-            </g>
-          ))}
+          {(modo === 'NINO' || modo === 'MIXTO') && (
+            <>
+              {dibujarFila(CUADRANTES_NINO.Q5, 156, modo === 'MIXTO' ? 115 : 50, 42)}
+              {dibujarFila(CUADRANTES_NINO.Q6, 376, modo === 'MIXTO' ? 115 : 50, 42)}
+              {dibujarFila(CUADRANTES_NINO.Q8, 156, modo === 'MIXTO' ? 195 : 260, 42)}
+              {dibujarFila(CUADRANTES_NINO.Q7, 376, modo === 'MIXTO' ? 195 : 260, 42)}
+            </>
+          )}
         </svg>
 
-        {/* Panel de atajos */}
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 8,
-          padding: '10px 14px',
-          background: 'var(--surface2)',
-          borderRadius: 8,
-          border: '1px solid var(--border)',
-          minWidth: 110,
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 2 }}>
-            ATAJOS
-          </div>
-          <BtnAtajo
-            label="Boca entera"
-            activo={seleccionadas.length === TODAS.length}
-            onClick={seleccionarTodo}
-          />
-          <div style={{ height: 1, background: 'var(--border)', margin: '2px 0' }}/>
-          {Object.keys(CUADRANTES).map(q => (
+        {!soloLectura && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 8,
+            padding: '12px 16px', background: 'var(--surface2)',
+            borderRadius: 8, border: '1px solid var(--border)',
+            minWidth: 120,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 2 }}>
+              ATAJOS
+            </div>
             <BtnAtajo
-              key={q}
-              label={`Cuadrante ${q}`}
-              activo={cuadranteActivo(q)}
-              onClick={() => toggleCuadrante(q)}
+              label="Boca entera"
+              activo={seleccionadas.length > 0 && seleccionadas.length === obtenerTodasLasCaras(getPiezasActivas()).length}
+              onClick={seleccionarTodo}
             />
-          ))}
-        </div>
+            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}/>
+            {cuadrantesVisibles.map(q => (
+              <BtnAtajo
+                key={q}
+                label={`Cuadrante ${q}`}
+                activo={cuadranteActivo(q)}
+                onClick={() => toggleCuadrante(q)}
+              />
+            ))}
+          </div>
+        )}
+
       </div>
 
-      {/* Leyenda */}
-      <div style={{
-        display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
-        marginTop: 12, paddingTop: 12,
-        borderTop: '1px solid var(--border)'
-      }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 12, paddingTop: 16, borderTop: '1px solid var(--border)', justifyContent: 'center' }}>
         {Object.entries(COLORES).map(([key, val]) => (
           <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
-            <div style={{
-              width: 12, height: 12, borderRadius: 3,
-              background: val.fill, border: `1.5px solid ${val.stroke}`
-            }}/>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: val.fill, border: `1.5px solid ${val.stroke}` }}/>
             <span style={{ color: 'var(--text2)' }}>{val.label}</span>
           </div>
         ))}

@@ -15,6 +15,10 @@ def crear_workbook_nuevo():
     ws.append([
         "dni", "nombre", "apellido", "fecha_nacimiento",
         "telefono", "email", "obra_social", "nro_afiliado",
+        "hipertenso", "diabetico", "alteracion_coagulacion",
+        "fuma", "tiempo_fumador", "asma", "consume_drogas", "detalles_drogas",
+        "insuficiencia_renal", "insuficiencia_hepatica",
+        "embarazada", "tiempo_embarazo", "valor_presion",
         "alergias", "activo", "creado_en"
     ])
     ws_historia = wb.create_sheet("Historia")

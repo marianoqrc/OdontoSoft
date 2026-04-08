@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Save, Paperclip, FileText, Trash2, Eye, X } from 'lucide-react'
+import { ArrowLeft, Plus, Save, Paperclip, FileText, Trash2, X } from 'lucide-react'
 import { api } from '../../utils/api.js'
 import Odontograma, { COLORES } from '../../components/Odontograma.jsx'
 import Toast from '../../components/Toast.jsx'
@@ -10,40 +10,47 @@ const PROCEDIMIENTOS = [
   'Extracción', 'Blanqueamiento', 'Ortodoncia', 'Radiografía',
 ]
 
-const TODAS_LAS_PIEZAS = [11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28,
-                          31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48]
-
-const CUADRANTES_MAP = {
-  'Q1': [11,12,13,14,15,16,17,18],
-  'Q2': [21,22,23,24,25,26,27,28],
-  'Q3': [31,32,33,34,35,36,37,38],
-  'Q4': [41,42,43,44,45,46,47,48],
+// Opciones específicas para Ortodoncia
+const TIPOS_APARATO = {
+  'Fijos': ['Brackets metálicos', 'Brackets cerámicos o zafiro', 'Brackets linguales', 'Brackets autoligables'],
+  'Removibles': ['Alineadores invisibles', 'Ortodoncia interceptiva', 'Retenedores']
 }
 
 function formatearPiezas(piezasStr) {
   if (!piezasStr) return '—'
-  const piezas = piezasStr.split(',').map(Number).filter(Boolean).sort((a,b) => a-b)
-  if (piezas.length === 32) return 'Boca entera'
-  for (const [nombre, lista] of Object.entries(CUADRANTES_MAP)) {
-    if (piezas.length === lista.length && lista.every(p => piezas.includes(p)))
-      return `Cuadrante ${nombre}`
+  const partes = piezasStr.split(',').filter(Boolean);
+  if (partes.length === 0) return '—';
+  
+  if (!partes[0].includes('-')) {
+    return partes.join(', ');
   }
-  const cuadrantesCompletos = []
-  const yaContadas = new Set()
-  for (const [nombre, lista] of Object.entries(CUADRANTES_MAP)) {
-    if (lista.every(p => piezas.includes(p))) {
-      cuadrantesCompletos.push(nombre)
-      lista.forEach(p => yaContadas.add(p))
-    }
-  }
-  const sueltas = piezas.filter(p => !yaContadas.has(p))
-  const partes = []
-  if (cuadrantesCompletos.length) partes.push(cuadrantesCompletos.join(' + '))
-  if (sueltas.length) partes.push(sueltas.join(', '))
-  return partes.join(' + ')
+
+  const agrupadas = {};
+  partes.forEach(p => {
+    const [fdi, seccion] = p.split('-');
+    if (!agrupadas[fdi]) agrupadas[fdi] = [];
+    const nombreSec = seccion === 'C' ? 'Centro' : 
+                      seccion === 'T' ? 'Arriba' : 
+                      seccion === 'B' ? 'Abajo' : 
+                      seccion === 'L' ? 'Izq' : 
+                      seccion === 'R' ? 'Der' : seccion;
+    agrupadas[fdi].push(nombreSec);
+  });
+
+  return Object.entries(agrupadas).map(([fdi, secs]) => `${fdi} (${secs.join(', ')})`).join(' + ');
 }
 
-const FORM_VACIO = { procedimiento: '', descripcion: '' }
+// Actualizamos el formulario vacío para incluir los nuevos campos de ortodoncia
+const FORM_VACIO = { 
+  procedimiento: '', 
+  descripcion: '',
+  // Campos específicos de Ortodoncia
+  orto_mordida: '',
+  orto_tipo_aparato: '',
+  orto_subtipo_aparato: '',
+  orto_plan: '',
+  orto_tiempo: ''
+}
 
 // ── Componente de adjuntos por evento ────────────────────────────────────────
 function PanelAdjuntos({ dni, idAdjunto, onClose }) {
@@ -107,7 +114,6 @@ function PanelAdjuntos({ dni, idAdjunto, onClose }) {
           <button className="btn btn-secondary btn-sm" onClick={onClose}>✕</button>
         </div>
 
-        {/* Lista de archivos */}
         {archivos.length === 0 && (
           <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '20px 0', fontSize: 13 }}>
             No hay archivos adjuntos para este evento
@@ -132,15 +138,13 @@ function PanelAdjuntos({ dni, idAdjunto, onClose }) {
                 className="btn btn-sm"
                 style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 8px' }}
                 onClick={() => abrir(a.nombre)}
-                title="Ver archivo"
               >
-                <Eye size={12} />
+                Ver
               </button>
               <button
                 className="btn btn-sm"
                 style={{ background: '#fef2f2', color: 'var(--danger)', padding: '4px 8px' }}
                 onClick={() => eliminar(a.nombre)}
-                title="Eliminar"
               >
                 <Trash2 size={12} />
               </button>
@@ -148,7 +152,6 @@ function PanelAdjuntos({ dni, idAdjunto, onClose }) {
           ))}
         </div>
 
-        {/* Botón adjuntar */}
         <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={subir} />
         <button
           className="btn btn-primary"
@@ -174,12 +177,36 @@ export default function Historia() {
   const [estadosPiezas, setEstadosPiezas] = useState({})
   const [seleccionadas, setSeleccionadas] = useState([])
   const [form, setForm]                   = useState(FORM_VACIO)
-  const [archivosNuevos, setArchivosNuevos] = useState([]) // NUEVO ESTADO PARA ARCHIVOS
+  const [archivosNuevos, setArchivosNuevos] = useState([])
   const [toast, setToast]                 = useState(null)
   const [guardando, setGuardando]         = useState(false)
-  const [adjuntosEvento, setAdjuntosEvento] = useState(null) // {idAdjunto}
+  const [adjuntosEvento, setAdjuntosEvento] = useState(null)
+  const [eventoViendo, setEventoViendo] = useState(null) 
+  
+  const [modoOdontograma, setModoOdontograma] = useState('ADULTO')
+  const fileInputRef = useRef();
 
-  const fileInputRef = useRef(); // Para el botón de adjuntar nuevo
+  useEffect(() => {
+    async function fetchPacienteInfo() {
+      try {
+        const data = await api.get('/pacientes');
+        const pac = data.find(p => String(p.dni) === String(dni));
+        if (pac && pac.fecha_nacimiento) {
+          const hoy = new Date();
+          const nacimiento = new Date(pac.fecha_nacimiento);
+          let edad = hoy.getFullYear() - nacimiento.getFullYear();
+          const m = hoy.getMonth() - nacimiento.getMonth();
+          if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) {
+            edad--;
+          }
+          if (edad < 12) {
+            setModoOdontograma('NINO');
+          }
+        }
+      } catch (e) { console.error("Error al buscar edad", e) }
+    }
+    if (dni) fetchPacienteInfo();
+  }, [dni]);
 
   const cargarHistoria = useCallback(async () => {
     if (!dni) return
@@ -190,9 +217,13 @@ export default function Historia() {
       const invertido = [...data].reverse()
       for (const evento of invertido) {
         if (!evento.piezas || !evento.estado_pieza) continue
-        const piezas = evento.piezas.split(',').map(Number)
-        for (const pieza of piezas) {
-          if (!estados[pieza]) estados[pieza] = evento.estado_pieza
+        const partes = evento.piezas.split(',')
+        for (const parte of partes) {
+          if (!parte.includes('-')) {
+            ['C','T','B','L','R'].forEach(s => estados[`${parte}-${s}`] = evento.estado_pieza);
+          } else {
+            estados[parte] = evento.estado_pieza
+          }
         }
       }
       setEstadosPiezas(estados)
@@ -203,29 +234,22 @@ export default function Historia() {
 
   useEffect(() => { cargarHistoria() }, [cargarHistoria])
 
-  function togglePieza(fdi) {
+  function toggleSeccion(idSeccion) {
     setSeleccionadas(prev =>
-      prev.includes(fdi) ? prev.filter(p => p !== fdi) : [...prev, fdi]
+      prev.includes(idSeccion) ? prev.filter(p => p !== idSeccion) : [...prev, idSeccion]
     )
   }
 
   const campo = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }))
 
-  // Función para capturar los archivos seleccionados
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files)
     if (files.length > 0) {
       setArchivosNuevos(prev => [...prev, ...files]);
     }
-    /*console.log('Archivos seleccionados:', e.target.files)
-    if (e.target.files.length > 0) {
-      setArchivosNuevos(prev => [...prev, ...Array.from(e.target.files)]);
-    }
-    // Reseteamos el input para permitir subir el mismo archivo si fue borrado
-    e.target.value = null; */
+    e.target.value = null;
   }
 
-  // Función para remover un archivo de la lista antes de enviar
   const removerArchivoNuevo = (index) => {
     setArchivosNuevos(prev => prev.filter((_, i) => i !== index));
   }
@@ -239,10 +263,26 @@ export default function Historia() {
     try {
       const formData = new FormData();
       formData.append('procedimiento', form.procedimiento);
-      formData.append('descripcion', form.descripcion);
-      formData.append('piezas', JSON.stringify(seleccionadas));
+      formData.append('piezas', JSON.stringify(seleccionadas)); 
       
-      // Dejamos UN SOLO bucle para adjuntar los archivos
+      // Armar la descripción final uniendo los campos específicos
+      let descripcionFinal = form.descripcion;
+      
+      if (form.procedimiento === 'Ortodoncia') {
+        const detallesOrto = [];
+        if (form.orto_mordida) detallesOrto.push(`Mordida: Clase ${form.orto_mordida}`);
+        if (form.orto_tipo_aparato) detallesOrto.push(`Aparato: ${form.orto_tipo_aparato} ${form.orto_subtipo_aparato ? `(${form.orto_subtipo_aparato})` : ''}`);
+        if (form.orto_plan) detallesOrto.push(`Plan: ${form.orto_plan}`);
+        if (form.orto_tiempo) detallesOrto.push(`Tiempo est.: ${form.orto_tiempo}`);
+        
+        // Juntamos todo. Primero el detalle técnico, luego las notas manuales.
+        if (detallesOrto.length > 0) {
+          descripcionFinal = `[DETALLE ORTODONCIA]\n${detallesOrto.join('\n')}\n\n[NOTAS ADICIONALES]\n${form.descripcion}`;
+        }
+      }
+
+      formData.append('descripcion', descripcionFinal);
+
       archivosNuevos.forEach(file => {
         formData.append('archivos', file);
       });
@@ -267,6 +307,21 @@ export default function Historia() {
     } finally { setGuardando(false) }
   }
 
+  const getEstadosLectura = (ev) => {
+    const estados = {};
+    if (!ev.piezas) return estados;
+    
+    const partes = ev.piezas.split(',');
+    for (const parte of partes) {
+      if (!parte.includes('-')) {
+         ['C','T','B','L','R'].forEach(s => estados[`${parte}-${s}`] = ev.estado_pieza || 'obturacion');
+      } else {
+         estados[parte] = ev.estado_pieza || 'obturacion'; 
+      }
+    }
+    return estados;
+  };
+
   if (!dni) {
     return (
       <div style={{ textAlign: 'center', padding: 60, color: 'var(--text2)' }}>
@@ -280,6 +335,76 @@ export default function Historia() {
     )
   }
 
+  // ============================================================================
+  // RENDER: VISTA DE DETALLE DEL EVENTO (Pantalla completa)
+  // ============================================================================
+  if (eventoViendo) {
+    return (
+      <div>
+        {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+        {adjuntosEvento && (
+          <PanelAdjuntos dni={dni} idAdjunto={adjuntosEvento} onClose={() => setAdjuntosEvento(null)} />
+        )}
+
+        <div className="page-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setEventoViendo(null)}>
+              <ArrowLeft size={14} /> Volver a Historia Clínica
+            </button>
+            <div>
+              <div className="page-title">{eventoViendo.procedimiento}</div>
+              <div className="page-subtitle">
+                Fecha: {new Date(eventoViendo.fecha).toLocaleDateString('es-AR')} · Paciente: {nombrePaciente}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+            Odontograma de la intervención
+          </div>
+          <div style={{ pointerEvents: 'none', display: 'flex', justifyContent: 'center' }}>
+            <Odontograma
+              modoInicial={modoOdontograma}
+              estados={getEstadosLectura(eventoViendo)}
+              seleccionadas={[]}
+              onToggleSeccion={() => {}}
+              onSetSeleccionadas={() => {}}
+            />
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 16, background: 'var(--surface2)', padding: 12, borderRadius: 8 }}>
+            <strong>Piezas tratadas: </strong> {formatearPiezas(eventoViendo.piezas)}
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', marginBottom: 12, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+            Descripción / Notas
+          </div>
+          <div style={{ fontSize: 14, color: 'var(--text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+            {eventoViendo.descripcion || 'Sin notas adicionales.'}
+          </div>
+          
+          {eventoViendo.id_adjunto && (
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--surface2)' }}>
+              <button
+                className="btn"
+                style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}
+                onClick={() => setAdjuntosEvento(eventoViendo.id_adjunto)}
+              >
+                <Paperclip size={14} /> Ver archivos adjuntos
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================================
+  // RENDER: VISTA PRINCIPAL (Odontograma + Historial)
+  // ============================================================================
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
@@ -309,24 +434,31 @@ export default function Historia() {
         {/* Columna izquierda */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Odontograma */}
+          {/* Odontograma Principal */}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 13 }}>
-              Odontograma — hacé clic en las piezas a tratar
+              Odontograma — Seleccioná las caras a tratar
             </div>
+            
             <Odontograma
+              key={modoOdontograma} 
+              modoInicial={modoOdontograma}
               estados={estadosPiezas}
               seleccionadas={seleccionadas}
-              onToggle={togglePieza}
+              onToggleSeccion={toggleSeccion}
               onSetSeleccionadas={setSeleccionadas}
             />
+            
             {seleccionadas.length > 0 && (
-              <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text2)', lineHeight: 1.8 }}>
-                <strong>Seleccionadas: </strong>
-                {formatearPiezas(seleccionadas.join(','))}
-                <span style={{ color: 'var(--text3)', marginLeft: 6 }}>
-                  ({seleccionadas.length} piezas)
-                </span>
+              <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text2)', lineHeight: 1.8, background: 'var(--surface2)', padding: '10px', borderRadius: '6px' }}>
+                <strong>Caras seleccionadas: </strong>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                  {seleccionadas.map(sel => (
+                    <span key={sel} style={{ background: '#fff', border: '1px solid var(--border)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                      {sel.replace('-C', ' Centro').replace('-T', ' Arriba').replace('-B', ' Abajo').replace('-L', ' Izq').replace('-R', ' Der')}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -339,14 +471,91 @@ export default function Historia() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="form-group">
                 <label>Procedimiento *</label>
-                <select value={form.procedimiento} onChange={campo('procedimiento')} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)' }}
->
+                <select 
+                  value={form.procedimiento} 
+                  onChange={(e) => {
+                    // Al cambiar de procedimiento, limpiamos los campos extra
+                    setForm(f => ({ 
+                      ...f, 
+                      procedimiento: e.target.value,
+                      orto_mordida: '', orto_tipo_aparato: '', orto_subtipo_aparato: '', orto_plan: '', orto_tiempo: ''
+                    }))
+                  }} 
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                >
                   <option value="">Seleccioná...</option>
                   {PROCEDIMIENTOS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
+
+              {/* === CAMPOS CONDICIONALES PARA ORTODONCIA === */}
+              {form.procedimiento === 'Ortodoncia' && (
+                <div style={{ background: 'var(--surface2)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Especificaciones de Ortodoncia
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Tipo de Mordida</label>
+                    <select value={form.orto_mordida} onChange={campo('orto_mordida')} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                      <option value="">Seleccioná...</option>
+                      <option value="1">Clase 1</option>
+                      <option value="2">Clase 2</option>
+                      <option value="3">Clase 3</option>
+                    </select>
+                  </div>
+
+                  <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div className="form-group">
+                      <label>Tipo de aparato</label>
+                      <select 
+                        value={form.orto_tipo_aparato} 
+                        onChange={(e) => setForm(f => ({ ...f, orto_tipo_aparato: e.target.value, orto_subtipo_aparato: '' }))} 
+                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                      >
+                        <option value="">Seleccioná...</option>
+                        {Object.keys(TIPOS_APARATO).map(tipo => <option key={tipo} value={tipo}>{tipo}</option>)}
+                      </select>
+                    </div>
+
+                    {form.orto_tipo_aparato && (
+                      <div className="form-group">
+                        <label>Subtipo</label>
+                        <select value={form.orto_subtipo_aparato} onChange={campo('orto_subtipo_aparato')} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                          <option value="">Seleccioná...</option>
+                          {TIPOS_APARATO[form.orto_tipo_aparato].map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Plan de tratamiento (correcciones)</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ej: Expansión maxilar, alineación..." 
+                      value={form.orto_plan} 
+                      onChange={campo('orto_plan')} 
+                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Tiempo estimado</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ej: 18 meses" 
+                      value={form.orto_tiempo} 
+                      onChange={campo('orto_tiempo')} 
+                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                    />
+                  </div>
+                </div>
+              )}
+              {/* ============================================== */}
+
               <div className="form-group">
-                <label>Descripción / Notas</label>
+                <label>{form.procedimiento === 'Ortodoncia' ? 'Notas adicionales' : 'Descripción / Notas'}</label>
                 <textarea
                   rows={4}
                   placeholder="Detalles del procedimiento..."
@@ -356,7 +565,6 @@ export default function Historia() {
                 />  
               </div>
 
-              {/* SECCIÓN DE ADJUNTOS NUEVOS */}
               <div style={{ marginTop: '4px' }}>
                 <input 
                   type="file" 
@@ -376,7 +584,6 @@ export default function Historia() {
                   Adjuntar archivos a este registro
                 </button>
                 
-                {/* Previsualización de los archivos seleccionados */}
                 {archivosNuevos.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                     {archivosNuevos.map((file, i) => (
@@ -432,39 +639,59 @@ export default function Historia() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {historia.map((ev, i) => (
               <div key={i} className="card" style={{ padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>
-                    {ev.procedimiento || 'Sin procedimiento'}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-                    {ev.fecha ? new Date(ev.fecha).toLocaleDateString('es-AR') : ''}
-                  </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, borderBottom: '1px solid var(--surface2)', paddingBottom: '8px' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--primary-dark)' }}>
+                      {ev.procedimiento || 'Sin procedimiento'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                      {ev.fecha ? new Date(ev.fecha).toLocaleDateString('es-AR') : ''}
+                    </div>
+                  </div>
+                  
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => setEventoViendo(ev)}
+                    style={{ 
+                      padding: '4px 10px', 
+                      fontSize: '11px', 
+                      background: 'var(--surface)', 
+                      border: '1px solid var(--border)', 
+                      color: 'var(--primary)',
+                      fontWeight: 600 
+                    }}
+                  >
+                    Ver detalle
+                  </button>
                 </div>
+
                 {ev.piezas && (
                   <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 4 }}>
                     <strong>Piezas: </strong>{formatearPiezas(ev.piezas)}
                   </div>
                 )}
+                
                 {ev.descripcion && (
-                  <div style={{ fontSize: 12.5, color: 'var(--text2)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--text2)', marginBottom: 8, display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {ev.descripcion}
                   </div>
                 )}
 
-                {/* Botón adjuntos */}
                 {ev.id_adjunto && (
-                  <button
-                    className="btn btn-sm"
-                    style={{
-                      background: 'var(--primary-light)',
-                      color: 'var(--primary)',
-                      padding: '4px 10px',
-                      fontSize: 11.5
-                    }}
-                    onClick={() => setAdjuntosEvento(ev.id_adjunto)}
-                  >
-                    <Paperclip size={11} /> Adjuntos
-                  </button>
+                  <div style={{ marginTop: '8px' }}>
+                    <button
+                      className="btn btn-sm"
+                      style={{
+                        background: 'var(--primary-light)',
+                        color: 'var(--primary)',
+                        padding: '4px 10px',
+                        fontSize: 11.5
+                      }}
+                      onClick={() => setAdjuntosEvento(ev.id_adjunto)}
+                    >
+                      <Paperclip size={11} /> Adjuntos
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
