@@ -1,10 +1,7 @@
 import os
 from datetime import datetime, date, timedelta
-from openpyxl import Workbook, load_workbook
-from config import DATA_DIR
+from config import get_db_connection
 import pacientes as pac
-
-TURNOS_FILE = os.path.join(DATA_DIR, '_turnos.xlsx')
 
 HORA_MANANA_INICIO = "09:00"
 HORA_MANANA_FIN    = "13:00"
@@ -26,37 +23,6 @@ def generar_modulos(hora_inicio, hora_fin):
 
 MODULOS_MANANA = generar_modulos(HORA_MANANA_INICIO, HORA_MANANA_FIN)
 MODULOS_TARDE  = generar_modulos(HORA_TARDE_INICIO,  HORA_TARDE_FIN)
-TODOS_MODULOS  = MODULOS_MANANA + MODULOS_TARDE
-
-def init_turnos():
-    os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(TURNOS_FILE):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Turnos"
-        ws.append([
-            "id", "fecha", "hora_inicio", "hora_fin",
-            "dni_paciente", "nombre_paciente", "motivo",
-            "estado", "creado_en"
-        ])
-        wb.save(TURNOS_FILE)
-
-def leer_todos():
-    init_turnos()
-    try:
-        wb = load_workbook(TURNOS_FILE, read_only=True)
-        ws = wb["Turnos"]
-        headers = [c.value for c in ws[1]]
-        turnos = []
-        for row in ws.iter_rows(min_row=2):
-            vals = [c.value for c in row]
-            if any(v is not None for v in vals):
-                turnos.append(dict(zip(headers, vals)))
-        wb.close()
-        return turnos
-    except Exception as e:
-        print(f"Error leyendo turnos: {e}")
-        return []
 
 def hora_a_mins(hora):
     h, m = map(int, hora.split(':'))
@@ -65,11 +31,35 @@ def hora_a_mins(hora):
 def mins_a_hora(mins):
     return f"{mins//60:02d}:{mins%60:02d}"
 
+def leer_todos():
+    """Lee todos los turnos no cancelados de SQLite."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM turnos WHERE estado != 'cancelado'")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # Formateamos para que el frontend reciba las mismas claves que usaba el Excel
+    turnos = []
+    for row in rows:
+        t = dict(row)
+        # Adaptamos los nombres de columnas de SQLite a lo que espera tu frontend
+        turnos.append({
+            "id": t["id"],
+            "fecha": t["fecha"],
+            "hora_inicio": t["hora"],
+            "hora_fin": mins_a_hora(hora_a_mins(t["hora"]) + t["duracion"]),
+            "dni_paciente": t["dni_paciente"],
+            "nombre_paciente": t["titulo"], # El título en DB es el nombre del paciente en el front
+            "motivo": t["notas"],           # Las notas en DB son el motivo en el front
+            "estado": t["estado"],
+            "creado_en": t["creado_en"]
+        })
+    return turnos
+
 def leer_por_fecha(fecha_str):
     todos = leer_todos()
-    return [t for t in todos
-            if str(t.get("fecha","")) == fecha_str
-            and t.get("estado") != "cancelado"]
+    return [t for t in todos if str(t.get("fecha","")) == fecha_str]
 
 def get_disponibilidad(fecha_str, turno="manana"):
     """
@@ -113,7 +103,7 @@ def get_timeline(fecha_str, turno="manana"):
     hora_fin_str = HORA_MANANA_FIN if turno == "manana" else HORA_TARDE_FIN
     ocupados = leer_por_fecha(fecha_str)
     
-    # NUEVO: Obtenemos todos los pacientes para cruzar datos
+    # Obtenemos todos los pacientes para cruzar datos
     lista_pacientes = pac.listar_pacientes()
     mapa_pacientes = {str(p.get("dni")): p.get("telefono", "") for p in lista_pacientes}
 
@@ -126,7 +116,7 @@ def get_timeline(fecha_str, turno="manana"):
         inicio = hora_a_mins(str(t["hora_inicio"]))
         fin    = hora_a_mins(str(t["hora_fin"]))
         
-        # NUEVO: Agregamos el teléfono al turno cruzando por DNI
+        # Agregamos el teléfono al turno cruzando por DNI
         dni_paciente = str(t.get("dni_paciente", ""))
         telefono = mapa_pacientes.get(dni_paciente, "")
         t["telefono_paciente"] = telefono
@@ -174,7 +164,6 @@ def get_timeline(fecha_str, turno="manana"):
     return bloques
 
 def crear_turno(datos):
-    init_turnos()
     fecha       = datos.get("fecha")
     hora_inicio = datos.get("hora_inicio")
     hora_fin    = datos.get("hora_fin")
@@ -193,41 +182,43 @@ def crear_turno(datos):
                 f"({t['hora_inicio']} - {t['hora_fin']})"
             )
 
-    todos = leer_todos()
-    nuevo_id = max((t.get("id", 0) or 0 for t in todos), default=0) + 1
-
-    try:
-        wb = load_workbook(TURNOS_FILE)
-        ws = wb["Turnos"]
-        ws.append([
-            nuevo_id, fecha, hora_inicio, hora_fin,
-            datos.get("dni_paciente", ""),
-            datos.get("nombre_paciente", ""),
-            datos.get("motivo", ""),
-            "confirmado",
-            datetime.now().isoformat(),
-        ])
-        wb.save(TURNOS_FILE)
-        return {"ok": True, "id": nuevo_id}
-    except PermissionError:
-        raise PermissionError("El archivo de turnos está abierto. Cerralo y volvé a intentar.")
+    duracion = fin_nuevo - inicio_nuevo
+    creado_en = datetime.now().isoformat()
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # INSERT en SQLite
+    cursor.execute('''
+        INSERT INTO turnos (titulo, fecha, hora, duracion, dni_paciente, notas, estado, creado_en)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        datos.get("nombre_paciente", ""), # titulo
+        fecha,
+        hora_inicio, # hora
+        duracion,
+        datos.get("dni_paciente", ""),
+        datos.get("motivo", ""), # notas
+        "confirmado", # estado inicial
+        creado_en
+    ))
+    
+    nuevo_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True, "id": nuevo_id}
 
 def cancelar_turno(turno_id):
-    init_turnos()
-    try:
-        wb = load_workbook(TURNOS_FILE)
-        ws = wb["Turnos"]
-        headers = [c.value for c in ws[1]]
-        id_col     = headers.index("id") + 1
-        estado_col = headers.index("estado") + 1
-        for row in ws.iter_rows(min_row=2):
-            if row[id_col-1].value == turno_id:
-                row[estado_col-1].value = "cancelado"
-                break
-        wb.save(TURNOS_FILE)
-        return {"ok": True}
-    except PermissionError:
-        raise PermissionError("El archivo de turnos está abierto. Cerralo y volvé a intentar.")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # UPDATE en SQLite
+    cursor.execute("UPDATE turnos SET estado = 'cancelado' WHERE id = ?", (turno_id,))
+    
+    conn.commit()
+    conn.close()
+    return {"ok": True}
     
 def proximos_turnos(dias=7):
     hoy = date.today()
@@ -235,35 +226,38 @@ def proximos_turnos(dias=7):
     resultado = []
     for i in range(dias):
         dia = hoy + timedelta(days=i)
-        if dia.weekday() in [0,1,2,3,4,5]:
+        if dia.weekday() in [0,1,2,3,4,5]: # Lunes a Sábado
             fecha_str = dia.isoformat()
-            del_dia = [t for t in todos
-                      if str(t.get("fecha","")) == fecha_str
-                      and t.get("estado") != "cancelado"]
+            del_dia = [t for t in todos if str(t.get("fecha","")) == fecha_str]
             resultado.extend(del_dia)
+            
     return sorted(resultado, key=lambda t: (str(t["fecha"]), str(t["hora_inicio"])))
 
 def actualizar_turno(turno_id, datos):
-    init_turnos()
-    try:
-        wb = load_workbook(TURNOS_FILE)
-        ws = wb["Turnos"]
-        headers = [c.value for c in ws[1]]
-        id_col = headers.index("id") + 1
-        nombre_col = headers.index("nombre_paciente") + 1
-        motivo_col = headers.index("motivo") + 1
-
-        for row in ws.iter_rows(min_row=2):
-            if row[id_col-1].value == turno_id:
-                # Si mandamos nombre nuevo, lo actualiza
-                if "nombre_paciente" in datos:
-                    row[nombre_col-1].value = datos["nombre_paciente"]
-                # Si mandamos motivo nuevo, lo actualiza
-                if "motivo" in datos:
-                    row[motivo_col-1].value = datos["motivo"]
-                break
-                
-        wb.save(TURNOS_FILE)
-        return {"ok": True}
-    except PermissionError:
-        raise PermissionError("El archivo de turnos está abierto. Cerralo y volvé a intentar.")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Armamos la consulta dinámicamente según lo que venga en 'datos'
+    actualizaciones = []
+    valores = []
+    
+    if "nombre_paciente" in datos:
+        actualizaciones.append("titulo = ?")
+        valores.append(datos["nombre_paciente"])
+        
+    if "motivo" in datos:
+        actualizaciones.append("notas = ?")
+        valores.append(datos["motivo"])
+        
+    if not actualizaciones:
+        return {"ok": True} # No hay nada que actualizar
+        
+    valores.append(turno_id) # Para el WHERE
+    
+    query = f"UPDATE turnos SET {', '.join(actualizaciones)} WHERE id = ?"
+    cursor.execute(query, valores)
+    
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True}

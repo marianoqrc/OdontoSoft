@@ -30,6 +30,12 @@ dist/
 *.sln
 *.sw?
 
+# Base de datos y archivos médicos de pacientes
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
 # Electron builds
 release/
 dist/
