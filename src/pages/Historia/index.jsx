@@ -10,41 +10,55 @@ const PROCEDIMIENTOS = [
   'Extracción', 'Blanqueamiento', 'Ortodoncia', 'Radiografía',
 ]
 
-// Opciones específicas para Ortodoncia
 const TIPOS_APARATO = {
   'Fijos': ['Brackets metálicos', 'Brackets cerámicos o zafiro', 'Brackets linguales', 'Brackets autoligables'],
   'Removibles': ['Alineadores invisibles', 'Ortodoncia interceptiva', 'Retenedores']
 }
 
+// Transformado para agrupar inteligentemente las caras y los colores aplicados
 function formatearPiezas(piezasStr) {
   if (!piezasStr) return '—'
   const partes = piezasStr.split(',').filter(Boolean);
   if (partes.length === 0) return '—';
-  
-  if (!partes[0].includes('-')) {
-    return partes.join(', ');
-  }
 
   const agrupadas = {};
+  
   partes.forEach(p => {
-    const [fdi, seccion] = p.split('-');
-    if (!agrupadas[fdi]) agrupadas[fdi] = [];
+    // Extrae el color si lo tiene (ej: "18-C:caries" -> ["18-C", "caries"])
+    const [idParte, estadoStr] = p.includes(':') ? p.split(':') : [p, 'Tratado'];
+    let fdi, seccion;
+    
+    if (!idParte.includes('-')) {
+      fdi = idParte;
+      seccion = 'Completo';
+    } else {
+      [fdi, seccion] = idParte.split('-');
+    }
+
+    if (!agrupadas[fdi]) agrupadas[fdi] = {};
+    if (!agrupadas[fdi][estadoStr]) agrupadas[fdi][estadoStr] = [];
+    
     const nombreSec = seccion === 'C' ? 'Centro' : 
                       seccion === 'T' ? 'Arriba' : 
                       seccion === 'B' ? 'Abajo' : 
                       seccion === 'L' ? 'Izq' : 
                       seccion === 'R' ? 'Der' : seccion;
-    agrupadas[fdi].push(nombreSec);
+    
+    if (nombreSec !== 'Completo') agrupadas[fdi][estadoStr].push(nombreSec);
   });
 
-  return Object.entries(agrupadas).map(([fdi, secs]) => `${fdi} (${secs.join(', ')})`).join(' + ');
+  return Object.entries(agrupadas).map(([fdi, estadosObj]) => {
+    const estadosStrs = Object.entries(estadosObj).map(([est, secs]) => {
+      const nombreEst = est === 'Tratado' ? '' : ` (${COLORES[est]?.label || est})`;
+      return secs.length > 0 ? `${secs.join(', ')}${nombreEst}` : `Diente completo${nombreEst}`;
+    });
+    return `${fdi} [${estadosStrs.join(' | ')}]`;
+  }).join(' + ');
 }
 
-// Actualizamos el formulario vacío para incluir los nuevos campos de ortodoncia
 const FORM_VACIO = { 
   procedimiento: '', 
   descripcion: '',
-  // Campos específicos de Ortodoncia
   orto_mordida: '',
   orto_tipo_aparato: '',
   orto_subtipo_aparato: '',
@@ -52,7 +66,6 @@ const FORM_VACIO = {
   orto_tiempo: ''
 }
 
-// ── Componente de adjuntos por evento ────────────────────────────────────────
 function PanelAdjuntos({ dni, idAdjunto, onClose }) {
   const [archivos, setArchivos] = useState([])
   const [subiendo, setSubiendo] = useState(false)
@@ -175,7 +188,10 @@ export default function Historia() {
 
   const [historia, setHistoria]           = useState([])
   const [estadosPiezas, setEstadosPiezas] = useState({})
-  const [seleccionadas, setSeleccionadas] = useState([])
+  
+  // AHORA ES UN OBJETO: ej. { "18-C": "caries", "21-T": "obturacion" }
+  const [seleccionadas, setSeleccionadas] = useState({}) 
+  
   const [form, setForm]                   = useState(FORM_VACIO)
   const [archivosNuevos, setArchivosNuevos] = useState([])
   const [toast, setToast]                 = useState(null)
@@ -216,13 +232,19 @@ export default function Historia() {
       const estados = {}
       const invertido = [...data].reverse()
       for (const evento of invertido) {
-        if (!evento.piezas || !evento.estado_pieza) continue
+        if (!evento.piezas) continue
         const partes = evento.piezas.split(',')
         for (const parte of partes) {
-          if (!parte.includes('-')) {
-            ['C','T','B','L','R'].forEach(s => estados[`${parte}-${s}`] = evento.estado_pieza);
+          
+          // Desarmamos el string viejo o nuevo
+          const [idParte, estadoGuardado] = parte.includes(':') 
+              ? parte.split(':') 
+              : [parte, evento.estado_pieza || 'sano'];
+          
+          if (!idParte.includes('-')) {
+             ['C','T','B','L','R'].forEach(s => estados[`${idParte}-${s}`] = estadoGuardado);
           } else {
-            estados[parte] = evento.estado_pieza
+             estados[idParte] = estadoGuardado;
           }
         }
       }
@@ -234,10 +256,17 @@ export default function Historia() {
 
   useEffect(() => { cargarHistoria() }, [cargarHistoria])
 
-  function toggleSeccion(idSeccion) {
-    setSeleccionadas(prev =>
-      prev.includes(idSeccion) ? prev.filter(p => p !== idSeccion) : [...prev, idSeccion]
-    )
+  // Adaptado para manejar el objeto en vez de un array, y recibir el color del pincel
+  function toggleSeccion(idSeccion, pincel) {
+    setSeleccionadas(prev => {
+      const next = { ...prev };
+      if (next[idSeccion] === pincel) {
+        delete next[idSeccion]; // Si lo toca con el mismo color, se despinta
+      } else {
+        next[idSeccion] = pincel; // Si no, se pinta de ese color
+      }
+      return next;
+    })
   }
 
   const campo = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }))
@@ -263,9 +292,11 @@ export default function Historia() {
     try {
       const formData = new FormData();
       formData.append('procedimiento', form.procedimiento);
-      formData.append('piezas', JSON.stringify(seleccionadas)); 
       
-      // Armar la descripción final uniendo los campos específicos
+      // Convertimos el objeto en un array de strings (ej: ["18-C:caries", "21-T:obturacion"])
+      const arrayParaBackend = Object.entries(seleccionadas).map(([id, est]) => `${id}:${est}`);
+      formData.append('piezas', JSON.stringify(arrayParaBackend)); 
+      
       let descripcionFinal = form.descripcion;
       
       if (form.procedimiento === 'Ortodoncia') {
@@ -275,7 +306,6 @@ export default function Historia() {
         if (form.orto_plan) detallesOrto.push(`Plan: ${form.orto_plan}`);
         if (form.orto_tiempo) detallesOrto.push(`Tiempo est.: ${form.orto_tiempo}`);
         
-        // Juntamos todo. Primero el detalle técnico, luego las notas manuales.
         if (detallesOrto.length > 0) {
           descripcionFinal = `[DETALLE ORTODONCIA]\n${detallesOrto.join('\n')}\n\n[NOTAS ADICIONALES]\n${form.descripcion}`;
         }
@@ -299,7 +329,7 @@ export default function Historia() {
 
       setToast({ msg: 'Evento registrado correctamente', type: 'success' })
       setForm(FORM_VACIO)
-      setSeleccionadas([])
+      setSeleccionadas({}) // Vaciamos el objeto
       setArchivosNuevos([])
       cargarHistoria()
     } catch (e) {
@@ -313,10 +343,11 @@ export default function Historia() {
     
     const partes = ev.piezas.split(',');
     for (const parte of partes) {
-      if (!parte.includes('-')) {
-         ['C','T','B','L','R'].forEach(s => estados[`${parte}-${s}`] = ev.estado_pieza || 'obturacion');
+      const [idParte, estadoGuardado] = parte.includes(':') ? parte.split(':') : [parte, ev.estado_pieza || 'sano'];
+      if (!idParte.includes('-')) {
+         ['C','T','B','L','R'].forEach(s => estados[`${idParte}-${s}`] = estadoGuardado);
       } else {
-         estados[parte] = ev.estado_pieza || 'obturacion'; 
+         estados[idParte] = estadoGuardado; 
       }
     }
     return estados;
@@ -368,7 +399,7 @@ export default function Historia() {
             <Odontograma
               modoInicial={modoOdontograma}
               estados={getEstadosLectura(eventoViendo)}
-              seleccionadas={[]}
+              seleccionadas={{}}
               onToggleSeccion={() => {}}
               onSetSeleccionadas={() => {}}
               soloLectura={true}
@@ -432,13 +463,11 @@ export default function Historia() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
 
-        {/* Columna izquierda */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Odontograma Principal */}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 13 }}>
-              Odontograma — Seleccioná las caras a tratar
+              Odontograma — Seleccioná un color y pintá las caras tratadas
             </div>
             
             <Odontograma
@@ -450,21 +479,54 @@ export default function Historia() {
               onSetSeleccionadas={setSeleccionadas}
             />
             
-            {seleccionadas.length > 0 && (
+            {Object.keys(seleccionadas).length > 0 && (
               <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text2)', lineHeight: 1.8, background: 'var(--surface2)', padding: '10px', borderRadius: '6px' }}>
-                <strong>Caras seleccionadas: </strong>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                  {seleccionadas.map(sel => (
-                    <span key={sel} style={{ background: '#fff', border: '1px solid var(--border)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
-                      {sel.replace('-C', ' Centro').replace('-T', ' Arriba').replace('-B', ' Abajo').replace('-L', ' Izq').replace('-R', ' Der')}
-                    </span>
-                  ))}
+                <strong>Marcas actuales: </strong>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                  {(() => {
+                    // Agrupamos las caras por diente para ver si están las 5 del mismo color
+                    const porDiente = {};
+                    Object.entries(seleccionadas).forEach(([id, est]) => {
+                      const [fdi, seccion] = id.split('-');
+                      if (!porDiente[fdi]) porDiente[fdi] = {};
+                      if (!porDiente[fdi][est]) porDiente[fdi][est] = [];
+                      porDiente[fdi][est].push(seccion);
+                    });
+
+                    const marcasAgrupadas = [];
+                    
+                    Object.entries(porDiente).forEach(([fdi, estados]) => {
+                      Object.entries(estados).forEach(([est, secciones]) => {
+                        const colorObj = COLORES[est] || COLORES.sano;
+                        
+                        // Si tiene las 5 caras pintadas de este color, lo resumimos
+                        if (secciones.length === 5) {
+                          marcasAgrupadas.push(
+                            <span key={`${fdi}-completo`} style={{ background: colorObj.fill, border: `1px solid ${colorObj.stroke}`, color: '#000', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                              {fdi} Completo ({colorObj.label})
+                            </span>
+                          );
+                        } else {
+                          // Si no, mostramos cada cara suelta
+                          secciones.forEach(sec => {
+                            const labelSec = sec === 'C' ? 'Centro' : sec === 'T' ? 'Arriba' : sec === 'B' ? 'Abajo' : sec === 'L' ? 'Izq' : 'Der';
+                            marcasAgrupadas.push(
+                              <span key={`${fdi}-${sec}`} style={{ background: colorObj.fill, border: `1px solid ${colorObj.stroke}`, color: '#000', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                                {fdi} {labelSec} ({colorObj.label})
+                              </span>
+                            );
+                          });
+                        }
+                      });
+                    });
+
+                    return marcasAgrupadas;
+                  })()}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Formulario */}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Plus size={14} /> Registrar intervención
@@ -475,7 +537,6 @@ export default function Historia() {
                 <select 
                   value={form.procedimiento} 
                   onChange={(e) => {
-                    // Al cambiar de procedimiento, limpiamos los campos extra
                     setForm(f => ({ 
                       ...f, 
                       procedimiento: e.target.value,
@@ -489,7 +550,6 @@ export default function Historia() {
                 </select>
               </div>
 
-              {/* === CAMPOS CONDICIONALES PARA ORTODONCIA === */}
               {form.procedimiento === 'Ortodoncia' && (
                 <div style={{ background: 'var(--surface2)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '4px' }}>
@@ -553,7 +613,6 @@ export default function Historia() {
                   </div>
                 </div>
               )}
-              {/* ============================================== */}
 
               <div className="form-group">
                 <label>{form.procedimiento === 'Ortodoncia' ? 'Notas adicionales' : 'Descripción / Notas'}</label>
@@ -625,7 +684,6 @@ export default function Historia() {
           </div>
         </div>
 
-        {/* Columna derecha — Historial */}
         <div>
           <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 13 }}>
             Historial ({historia.length} eventos)

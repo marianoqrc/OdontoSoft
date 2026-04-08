@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 
+// PALETA SIMPLIFICADA Y CON ORTODONCIA
 const COLORES = {
   sano:                { fill: '#ffffff', stroke: '#94a3b8', label: 'Sano' },
   caries:              { fill: '#fecaca', stroke: '#dc2626', label: 'Caries' },
   obturacion:          { fill: '#bfdbfe', stroke: '#2563eb', label: 'Obturación' },
   corona:              { fill: '#bbf7d0', stroke: '#15803d', label: 'Corona' },
   ausente:             { fill: '#e2e8f0', stroke: '#64748b', label: 'Ausente' },
-  endodoncia:          { fill: '#e9d5ff', stroke: '#7c3aed', label: 'Endodoncia' },
-  protesis:            { fill: '#fed7aa', stroke: '#c2410c', label: 'Prótesis' },
-  implante:            { fill: '#a7f3d0', stroke: '#047857', label: 'Implante' },
   extraccion_indicada: { fill: '#fef08a', stroke: '#ca8a04', label: 'Extracción ind.' },
+  ortodoncia:          { fill: '#e9d5ff', stroke: '#9333ea', label: 'Ortodoncia' },
 }
 
 const CUADRANTES_ADULTO = {
@@ -35,14 +34,16 @@ function BtnAtajo({ label, onClick, activo }) {
       style={{
         padding: '6px 12px',
         borderRadius: 5,
-        border: `1.5px solid ${activo ? '#d4a5a5' : 'var(--border)'}`,
+        border: `1px solid ${activo ? '#d4a5a5' : 'var(--border)'}`,
         background: activo ? '#fcf6f6' : 'var(--surface)',
         color: activo ? '#c49090' : 'var(--text2)',
         fontSize: 12,
         fontWeight: 600,
         cursor: 'pointer',
         transition: 'all .15s',
-        whiteSpace: 'nowrap',
+        whiteSpace: 'normal',
+        wordWrap: 'break-word',
+        width: '100%',
       }}
     >
       {label}
@@ -50,45 +51,68 @@ function BtnAtajo({ label, onClick, activo }) {
   )
 }
 
-function Pieza({ fdi, estados = {}, seleccionadas = [], onClickPieza }) {
-  const isSelected = (seccion) => seleccionadas.includes(`${fdi}-${seccion}`);
+function Pieza({ fdi, estados = {}, seleccionadas = {}, onClickPieza, onTogglePiezaEntera, soloLectura }) {
+  const isSelected = (seccion) => !!seleccionadas[`${fdi}-${seccion}`];
   
+  const isPiezaEnteraSelected = SECCIONES.every(sec => isSelected(sec));
+
   const getColor = (seccion) => {
-    if (isSelected(seccion)) return { fill: '#fef3c7', stroke: '#f59e0b' }; 
-    const nombreEstado = estados[`${fdi}-${seccion}`] || 'sano';
-    return COLORES[nombreEstado] || COLORES.sano;
+    const id = `${fdi}-${seccion}`;
+    
+    if (seleccionadas[id]) {
+      const colorObj = COLORES[seleccionadas[id]] || COLORES.sano;
+      return { fill: colorObj.fill, stroke: '#f59e0b', strokeWidth: 1.5 };
+    } 
+    
+    const nombreEstado = estados[id] || 'sano';
+    const colorGuardado = COLORES[nombreEstado] || COLORES.sano;
+    return { fill: colorGuardado.fill, stroke: colorGuardado.stroke, strokeWidth: 1 };
   };
 
   return (
     <g transform="translate(0,0)">
-      {/* Top */}
+      
+      {!soloLectura && (
+        <g 
+          onClick={() => onTogglePiezaEntera(fdi)} 
+          style={{ cursor: 'pointer' }}
+          transform="translate(0, -22)"
+        >
+          <rect 
+            x="-6" y="-6" width="12" height="12" rx="2"
+            fill={isPiezaEnteraSelected ? '#f59e0b' : '#f1f5f9'}
+            stroke={isPiezaEnteraSelected ? '#d97706' : '#cbd5e1'}
+            strokeWidth="1"
+          />
+          {isPiezaEnteraSelected && (
+            <path d="M-3,0 L-1,2 L4,-3" fill="none" stroke="white" strokeWidth="1.5" />
+          )}
+        </g>
+      )}
+
       <path 
         d="M -10,-14 L 10,-14 A 14,14 0 0,1 14,-10 L 7,-7 L -7,-7 L -14,-10 A 14,14 0 0,1 -10,-14 Z" 
-        fill={getColor('T').fill} stroke={getColor('T').stroke} strokeWidth="1.5"
+        fill={getColor('T').fill} stroke={getColor('T').stroke} strokeWidth={getColor('T').strokeWidth}
         onClick={() => onClickPieza && onClickPieza(fdi, 'T')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
       />
-      {/* Bottom */}
       <path 
         d="M -10,14 L 10,14 A 14,14 0 0,0 14,10 L 7,7 L -7,7 L -14,10 A 14,14 0 0,0 -10,14 Z" 
-        fill={getColor('B').fill} stroke={getColor('B').stroke} strokeWidth="1.5"
+        fill={getColor('B').fill} stroke={getColor('B').stroke} strokeWidth={getColor('B').strokeWidth}
         onClick={() => onClickPieza && onClickPieza(fdi, 'B')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
       />
-      {/* Left */}
       <path 
         d="M -14,-10 A 14,14 0 0,0 -14,10 L -7,7 L -7,-7 Z" 
-        fill={getColor('L').fill} stroke={getColor('L').stroke} strokeWidth="1.5"
+        fill={getColor('L').fill} stroke={getColor('L').stroke} strokeWidth={getColor('L').strokeWidth}
         onClick={() => onClickPieza && onClickPieza(fdi, 'L')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
       />
-      {/* Right */}
       <path 
         d="M 14,-10 A 14,14 0 0,1 14,10 L 7,7 L 7,-7 Z" 
-        fill={getColor('R').fill} stroke={getColor('R').stroke} strokeWidth="1.5"
+        fill={getColor('R').fill} stroke={getColor('R').stroke} strokeWidth={getColor('R').strokeWidth}
         onClick={() => onClickPieza && onClickPieza(fdi, 'R')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
       />
-      {/* Center */}
       <rect 
         x="-7" y="-7" width="14" height="14" 
-        fill={getColor('C').fill} stroke={getColor('C').stroke} strokeWidth="1.5"
+        fill={getColor('C').fill} stroke={getColor('C').stroke} strokeWidth={getColor('C').strokeWidth}
         onClick={() => onClickPieza && onClickPieza(fdi, 'C')} style={{ cursor: onClickPieza ? 'pointer' : 'default' }}
       />
       
@@ -99,13 +123,28 @@ function Pieza({ fdi, estados = {}, seleccionadas = [], onClickPieza }) {
   )
 }
 
-export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, seleccionadas = [], onToggleSeccion, onSetSeleccionadas, soloLectura = false }) {
+export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, seleccionadas = {}, onToggleSeccion, onSetSeleccionadas, soloLectura = false }) {
   const [modo, setModo] = useState(modoInicial);
+  const [pincel, setPincel] = useState('caries');
 
   const handleClickPieza = (fdi, seccion) => {
     if (!soloLectura && onToggleSeccion) {
-      onToggleSeccion(`${fdi}-${seccion}`);
+      onToggleSeccion(`${fdi}-${seccion}`, pincel); 
     }
+  };
+
+  const handleTogglePiezaEntera = (fdi) => {
+    if (soloLectura) return;
+    const carasDelDiente = SECCIONES.map(sec => `${fdi}-${sec}`);
+    const todasMismoPincel = carasDelDiente.every(c => seleccionadas[c] === pincel);
+    
+    const nuevas = { ...seleccionadas };
+    if (todasMismoPincel) {
+      carasDelDiente.forEach(c => delete nuevas[c]); 
+    } else {
+      carasDelDiente.forEach(c => nuevas[c] = pincel); 
+    }
+    onSetSeleccionadas(nuevas);
   };
 
   const obtenerTodasLasCaras = (arrayPiezas) => {
@@ -130,43 +169,47 @@ export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, sele
   const cuadranteActivo = (q) => {
     const map = { ...CUADRANTES_ADULTO, ...CUADRANTES_NINO };
     const carasCuadrante = obtenerTodasLasCaras(map[q]);
-    return carasCuadrante.every(cara => seleccionadas.includes(cara));
+    return carasCuadrante.every(cara => seleccionadas[cara] === pincel);
   };
 
   const toggleCuadrante = (q) => {
     if (soloLectura) return;
     const map = { ...CUADRANTES_ADULTO, ...CUADRANTES_NINO };
     const carasCuadrante = obtenerTodasLasCaras(map[q]);
+    const nuevas = { ...seleccionadas };
     
     if (cuadranteActivo(q)) {
-      onSetSeleccionadas(seleccionadas.filter(p => !carasCuadrante.includes(p)));
+      carasCuadrante.forEach(c => delete nuevas[c]);
     } else {
-      const nuevas = carasCuadrante.filter(p => !seleccionadas.includes(p));
-      onSetSeleccionadas([...seleccionadas, ...nuevas]);
+      carasCuadrante.forEach(c => nuevas[c] = pincel);
     }
+    onSetSeleccionadas(nuevas);
   };
 
   const seleccionarTodo = () => {
     if (soloLectura) return;
     const todasLasCaras = obtenerTodasLasCaras(getPiezasActivas());
-    if (seleccionadas.length === todasLasCaras.length) {
-      onSetSeleccionadas([]);
+    const todoPintado = todasLasCaras.every(c => seleccionadas[c] === pincel);
+    
+    const nuevas = { ...seleccionadas };
+    if (todoPintado) {
+      todasLasCaras.forEach(c => delete nuevas[c]);
     } else {
-      onSetSeleccionadas(todasLasCaras);
+      todasLasCaras.forEach(c => nuevas[c] = pincel);
     }
+    onSetSeleccionadas(nuevas);
   };
 
   const renderSelectorModo = () => {
-    // ESTA ES LA CLAVE: Si es solo lectura, devolvemos null (nada) para que no dibuje los botones
     if (soloLectura) return null; 
     
     return (
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '30px', justifyContent: 'center' }}>
         {['ADULTO', 'NINO', 'MIXTO'].map(m => (
           <button
             key={m}
             type="button"
-            onClick={() => { setModo(m); onSetSeleccionadas([]); }} 
+            onClick={() => { setModo(m); onSetSeleccionadas({}); }} 
             style={{
               padding: '6px 16px',
               borderRadius: '20px',
@@ -193,12 +236,13 @@ export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, sele
           estados={estados}
           seleccionadas={seleccionadas}
           onClickPieza={soloLectura ? undefined : handleClickPieza}
+          onTogglePiezaEntera={handleTogglePiezaEntera}
+          soloLectura={soloLectura}
         />
       </g>
     ))
   );
 
-  // ESTA ES LA OTRA CLAVE: Definimos los cuadrantes visibles SOLO si NO estamos en soloLectura
   const cuadrantesVisibles = [];
   if (!soloLectura) {
     if (modo === 'ADULTO' || modo === 'MIXTO') cuadrantesVisibles.push('Q1', 'Q2', 'Q4', 'Q3');
@@ -207,7 +251,6 @@ export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, sele
 
   return (
     <div>
-      {/* 1. Llama al selector de modo (si es soloLectura, renderiza null) */}
       {renderSelectorModo()}
       
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', justifyContent: 'center', overflowX: 'auto', paddingBottom: '10px' }}>
@@ -235,20 +278,22 @@ export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, sele
           )}
         </svg>
 
-        {/* 2. Llama al panel de Atajos SOLO si NO es soloLectura */}
         {!soloLectura && (
           <div style={{
             display: 'flex', flexDirection: 'column', gap: 8,
             padding: '12px 16px', background: 'var(--surface2)',
             borderRadius: 8, border: '1px solid var(--border)',
-            minWidth: 120,
+            minWidth: 100,
+            maxWidth: 140, 
+            flexShrink: 0, 
+            height: 'fit-content'
           }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 2 }}>
               ATAJOS
             </div>
             <BtnAtajo
               label="Boca entera"
-              activo={seleccionadas.length > 0 && seleccionadas.length === obtenerTodasLasCaras(getPiezasActivas()).length}
+              activo={Object.keys(seleccionadas).length > 0 && obtenerTodasLasCaras(getPiezasActivas()).every(c => seleccionadas[c] === pincel)}
               onClick={seleccionarTodo}
             />
             <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}/>
@@ -265,13 +310,42 @@ export default function Odontograma({ modoInicial = 'ADULTO', estados = {}, sele
 
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 12, paddingTop: 16, borderTop: '1px solid var(--border)', justifyContent: 'center' }}>
-        {Object.entries(COLORES).map(([key, val]) => (
-          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: val.fill, border: `1.5px solid ${val.stroke}` }}/>
-            <span style={{ color: 'var(--text2)' }}>{val.label}</span>
-          </div>
-        ))}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)', justifyContent: 'center' }}>
+        {Object.entries(COLORES).map(([key, val]) => {
+          const isActivo = pincel === key;
+
+          if (soloLectura) {
+            return (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: val.fill, border: `1.5px solid ${val.stroke}` }}/>
+                <span style={{ color: 'var(--text2)' }}>{val.label}</span>
+              </div>
+            )
+          }
+
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setPincel(key)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 12px', borderRadius: 20,
+                background: isActivo ? val.fill : 'var(--surface)',
+                border: `1.5px solid ${isActivo ? val.stroke : 'var(--border)'}`,
+                color: isActivo ? '#000' : 'var(--text2)',
+                fontWeight: isActivo ? 700 : 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                boxShadow: isActivo ? `0 0 0 2px #fff, 0 0 0 4px ${val.stroke}` : 'none', 
+                outline: 'none'
+              }}
+            >
+              <div style={{ width: 12, height: 12, borderRadius: 3, background: val.fill, border: `1.5px solid ${val.stroke}` }}/>
+              <span style={{ fontSize: 12 }}>{val.label}</span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
