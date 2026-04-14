@@ -52,6 +52,7 @@ def inicializar_base_datos():
         )
     ''')
     
+    # Tabla Historia Clínica
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS historia (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +66,27 @@ def inicializar_base_datos():
             FOREIGN KEY (dni) REFERENCES pacientes(dni)
         )
     ''')
+
+    # NUEVO: Intentamos agregar cada columna UNA POR UNA. 
+    # Si una ya existe, falla en silencio y sigue con la próxima.
+    columnas_facturacion = [
+        "monto TEXT",
+        "forma_pago TEXT",
+        "financiacion TEXT",
+        "pagado TEXT DEFAULT 'No'",
+        "pagos_detalle TEXT DEFAULT '[]'",
+        "tiene_financiacion TEXT DEFAULT 'No'",
+        "cuotas TEXT",
+        "id_adjunto_pago TEXT"
+    ]
     
+    for col in columnas_facturacion:
+        try:
+            cursor.execute(f"ALTER TABLE historia ADD COLUMN {col}")
+        except Exception:
+            pass 
+
+    # Tabla Turnos
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS turnos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

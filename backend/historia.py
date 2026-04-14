@@ -23,8 +23,6 @@ def leer_historia(dni):
 
 def agregar_evento(dni, evento):
     """Agrega un evento a la historia clínica en SQLite."""
-    
-    # Primero verificamos si el paciente existe
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT dni FROM pacientes WHERE dni = ?", (dni,))
@@ -33,21 +31,21 @@ def agregar_evento(dni, evento):
         raise ValueError("Paciente no encontrado en la base de datos")
 
     try:
-        # Timestamp único para crear la carpeta de fotos si hay adjuntos
         id_adjunto = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         fecha = datetime.now().isoformat()
         
-        # Procesamos las piezas (si vienen como lista o como string)
         piezas_raw = evento.get("piezas", [])
         if isinstance(piezas_raw, list):
             piezas_str = ",".join(str(p) for p in piezas_raw)
         else:
             piezas_str = str(piezas_raw)
 
-        # INSERT en la base de datos SQLite
         cursor.execute('''
-            INSERT INTO historia (dni, fecha, piezas, procedimiento, descripcion, profesional, id_adjunto)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO historia (
+                dni, fecha, piezas, procedimiento, descripcion, profesional, id_adjunto,
+                monto, forma_pago, financiacion, pagado
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             dni,
             fecha,
@@ -55,7 +53,11 @@ def agregar_evento(dni, evento):
             evento.get("procedimiento", ""),
             evento.get("descripcion", ""),
             evento.get("profesional", ""),
-            id_adjunto
+            id_adjunto,
+            evento.get("monto", ""),               
+            evento.get("forma_pago", ""),          
+            evento.get("financiacion", ""),
+            evento.get("pagado", "No")             # NUEVO CAMPO
         ))
 
         conn.commit()
@@ -64,6 +66,34 @@ def agregar_evento(dni, evento):
     except Exception as e:
         print(f"Error al guardar historia: {e}")
         raise
+    finally:
+        conn.close()
+
+# NUEVA FUNCIÓN PARA EDITAR LA PLATA DE UN EVENTO VIEJO
+def actualizar_facturacion(id_evento, datos):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Recuperar el ID de la carpeta de pagos o crear uno nuevo
+        cursor.execute("SELECT id_adjunto_pago FROM historia WHERE id = ?", (id_evento,))
+        row = cursor.fetchone()
+        id_adjunto_pago = row["id_adjunto_pago"] if row and row["id_adjunto_pago"] else datetime.now().strftime("PAGO_%Y-%m-%d_%H%M%S")
+
+        cursor.execute('''
+            UPDATE historia 
+            SET monto = ?, pagos_detalle = ?, tiene_financiacion = ?, cuotas = ?, pagado = ?, id_adjunto_pago = ?
+            WHERE id = ?
+        ''', (
+            datos.get("monto", ""),
+            datos.get("pagos_detalle", "[]"), # ACÁ SE GUARDAN LOS PARCIALES
+            datos.get("tiene_financiacion", "No"),
+            datos.get("cuotas", ""),
+            datos.get("pagado", "No"),
+            id_adjunto_pago,
+            id_evento
+        ))
+        conn.commit()
+        return {"ok": True, "id_adjunto_pago": id_adjunto_pago}
     finally:
         conn.close()
 

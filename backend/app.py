@@ -10,12 +10,27 @@ import shutil
 from flask import send_file as flask_send_file
 import json
 import os
-
+from historia import actualizar_facturacion
 #D:\soft\odontosoft\backend> d:\soft\odontosoft\backend\.venv\Scripts\python.exe app.py
 
 app = Flask(__name__)
 CORS(app)
 init_data_dir()
+
+@app.route('/historia/editar_caja/<int:id_evento>', methods=['POST'])
+def api_editar_facturacion(id_evento):
+    try:
+        # Extraemos los datos del formulario que manda React
+        datos = {
+            "monto": request.form.get("monto", ""),
+            "forma_pago": request.form.get("forma_pago", ""),
+            "financiacion": request.form.get("financiacion", ""),
+            "pagado": request.form.get("pagado", "No")
+        }
+        resultado = actualizar_facturacion(id_evento, datos)
+        return jsonify(resultado), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route("/pacientes", methods=["GET"])
 def get_pacientes():
@@ -72,43 +87,61 @@ def get_historia(dni):
 def post_evento(dni):
     try:
         import json
-        from werkzeug.utils import secure_filename
+        import historia as hist
 
-        # Leer datos del FormData
+        # 1. Leer datos básicos del FormData
         procedimiento = request.form.get('procedimiento', '')
         descripcion   = request.form.get('descripcion', '')
-        piezas_raw    = request.form.get('piezas', '[]')
-        piezas        = json.loads(piezas_raw)
+        
+        # Procesar piezas (a veces viene como JSON, a veces como string con comas)
+        piezas_raw = request.form.get('piezas', '[]')
+        try:
+            piezas = json.loads(piezas_raw)
+        except json.JSONDecodeError:
+            piezas = piezas_raw.split(',') if piezas_raw else []
 
+        # 2. Leer los NUEVOS campos de facturación
+        monto = request.form.get('monto', '')
+        pagado = request.form.get('pagado', 'No')
+        pagos_detalle = request.form.get('pagos_detalle', '[]')
+        tiene_financiacion = request.form.get('tiene_financiacion', 'No')
+        cuotas = request.form.get('cuotas', '')
+
+        # 3. Armar el diccionario completo para mandarlo a SQLite
         evento = {
             'procedimiento': procedimiento,
             'descripcion':   descripcion,
             'piezas':        piezas,
+            'monto':         monto,
+            'pagado':        pagado,
+            'pagos_detalle': pagos_detalle,
+            'tiene_financiacion': tiene_financiacion,
+            'cuotas':        cuotas
         }
 
+        # 4. Guardar en SQLite
         resultado = hist.agregar_evento(dni, evento)
 
-        # Subir archivos adjuntos si los hay
+        # 5. Guardar fotos/radiografías clínicas (usando la función centralizada)
         archivos = request.files.getlist('archivos')
         if archivos and resultado.get('id_adjunto'):
-            id_adjunto = resultado['id_adjunto']
-            from config import DATA_DIR
-            carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
-            os.makedirs(carpeta, exist_ok=True)
-            for archivo in archivos:
-                if archivo.filename:
-                    nombre = secure_filename(archivo.filename)
-                    archivo.save(os.path.join(carpeta, nombre))
+            hist.guardar_adjuntos(dni, resultado['id_adjunto'], archivos)
 
-        #resultado = hist.agregar_evento(dni, evento)
-        print("Resultado agregar_evento:", resultado)  # agregar
-        print("Archivos recibidos:", request.files.getlist('archivos'))  # agregar
+        # 6. Guardar comprobantes de pago separados
+        archivos_pago = request.files.getlist('archivos_pago')
+        if archivos_pago and resultado.get('id_adjunto_pago'):
+            hist.guardar_adjuntos(dni, resultado['id_adjunto_pago'], archivos_pago)
 
+        print("Evento guardado OK:", resultado) 
         return jsonify(resultado), 201
+
     except PermissionError as e:
         return jsonify({"error": str(e)}), 423
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"Error inesperado en post_evento: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/exportar", methods=["GET"])
 def exportar():
