@@ -266,5 +266,156 @@ def eliminar_adjunto(dni, id_adjunto, nombre):
         os.remove(ruta)
     return jsonify({"ok": True})
 
+@app.route('/estadisticas', methods=['GET'])
+def obtener_estadisticas():
+    try:
+        from config import get_db_connection
+        import json
+        from datetime import datetime, timedelta
+
+        rango = request.args.get('rango', 'historico')
+        
+        # Construcción dinámica del filtro de fecha para SQLite
+        filtro_fecha = ""
+        if rango == 'mes':
+            filtro_fecha = "WHERE fecha >= date('now', '-30 days')"
+        elif rango == 'trimestre':
+            filtro_fecha = "WHERE fecha >= date('now', '-90 days')"
+        elif rango == 'año':
+            filtro_fecha = "WHERE fecha >= date('now', '-365 days')"
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        query = f"SELECT monto, pagado, pagos_detalle, procedimiento FROM historia {filtro_fecha}"
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        conn.close()
+
+        ingresos_totales = 0
+        deuda_total = 0
+        conteo_procedimientos = {}
+        impacto_economico = {} # Para saber cuál deja más plata
+        metodos_pago = {}
+
+        for row in rows:
+            monto_total_evento = float(row['monto']) if row['monto'] else 0
+            pagado_flag = row['pagado']
+            proc = row['procedimiento'] or "Sin especificar"
+            
+            try:
+                pagos = json.loads(row['pagos_detalle']) if row['pagos_detalle'] else []
+            except:
+                pagos = []
+            
+            suma_pagos_evento = 0
+            for p in pagos:
+                monto_pago = float(p.get('monto', 0))
+                suma_pagos_evento += monto_pago
+                ingresos_totales += monto_pago
+                
+                # Metodos de pago
+                metodo = p.get('metodo', 'Otro')
+                metodos_pago[metodo] = metodos_pago.get(metodo, 0) + monto_pago
+
+            # KPIs de Deuda y Impacto
+            if pagado_flag != 'Si':
+                deuda = monto_total_evento - suma_pagos_evento
+                if deuda > 0:
+                    deuda_total += deuda
+
+            # Frecuencia e Impacto (acumulamos lo cobrado por tipo de tratamiento)
+            conteo_procedimientos[proc] = conteo_procedimientos.get(proc, 0) + 1
+            impacto_economico[proc] = impacto_economico.get(proc, 0) + suma_pagos_evento
+
+        # Cálculos Finales
+        cant_sesiones = len(rows)
+        ticket_promedio = ingresos_totales / cant_sesiones if cant_sesiones > 0 else 0
+        
+        # % de Cobrabilidad: (Lo que entró) / (Lo que debería haber entrado)
+        total_facturado = ingresos_totales + deuda_total
+        cobrabilidad = (ingresos_totales / total_facturado * 100) if total_facturado > 0 else 100
+
+        # Tratamiento de mayor impacto (el que más recaudó)
+        mayor_impacto = "N/A"
+        if impacto_economico:
+            mayor_impacto = max(impacto_economico, key=impacto_economico.get)
+
+        # Formateo para gráficos
+        grafico_procedimientos = [{"name": k, "value": v, "monto": impacto_economico.get(k, 0)} for k, v in conteo_procedimientos.items()]
+        grafico_procedimientos.sort(key=lambda x: x['value'], reverse=True)
+
+        grafico_metodos = [{"name": k, "value": v} for k, v in metodos_pago.items()]
+
+        return jsonify({
+            "ingresos_totales": round(ingresos_totales, 2),
+            "deuda_total": round(deuda_total, 2),
+            "tratamientos_totales": cant_sesiones,
+            "ticket_promedio": round(ticket_promedio, 2),
+            "cobrabilidad": round(cobrabilidad, 1),
+            "mayor_impacto": mayor_impacto,
+            "procedimientos": grafico_procedimientos,
+            "metodos_pago": grafico_metodos
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/deudores', methods=['GET'])
+def obtener_deudores():
+    try:
+        from config import get_db_connection
+        import json
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Unimos la tabla de pacientes con la de historia para tener el teléfono
+        cursor.execute('''
+            SELECT p.dni, p.nombre, p.apellido, p.telefono, h.monto, h.pagos_detalle
+            FROM pacientes p
+            JOIN historia h ON p.dni = h.dni
+            WHERE h.pagado != 'Si'
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+
+        deudores_dict = {}
+
+        for row in rows:
+            dni = row['dni']
+            monto = float(row['monto']) if row['monto'] else 0
+            
+            try:
+                pagos = json.loads(row['pagos_detalle']) if row['pagos_detalle'] else []
+            except json.JSONDecodeError:
+                pagos = []
+            
+            suma_pagos = sum(float(p.get('monto', 0)) for p in pagos)
+            deuda_evento = monto - suma_pagos
+
+            # Si realmente debe plata de esta intervención, lo sumamos a su cuenta
+            if deuda_evento > 0:
+                if dni not in deudores_dict:
+                    deudores_dict[dni] = {
+                        "dni": dni,
+                        "nombre": f"{row['nombre']} {row['apellido']}",
+                        "telefono": row['telefono'],
+                        "deuda_total": 0,
+                        "cantidad_tratamientos": 0
+                    }
+                
+                deudores_dict[dni]["deuda_total"] += deuda_evento
+                deudores_dict[dni]["cantidad_tratamientos"] += 1
+
+        # Convertimos el diccionario a lista y la ORDENAMOS de mayor a menor deuda
+        lista_deudores = list(deudores_dict.values())
+        lista_deudores.sort(key=lambda x: x['deuda_total'], reverse=True)
+
+        return jsonify(lista_deudores), 200
+
+    except Exception as e:
+        print(f"Error en deudores: {e}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(port=5050, debug=True)

@@ -4,6 +4,8 @@ import Pacientes from './pages/Pacientes/index.jsx'
 import Historia from './pages/Historia/index.jsx'
 import Exportacion from './pages/Exportacion/index.jsx'
 import Turnos from './pages/Turnos/index.jsx'
+import Dashboard from './Dashboard/index.jsx'
+import Deudores from "./Deudores/index.jsx";
 
 export default function App() {
   return (
@@ -15,6 +17,8 @@ export default function App() {
           <Route path="turnos"      element={<Turnos />} />
           <Route path="historia"    element={<Historia />} />
           <Route path="exportacion" element={<Exportacion />} />
+          <Route path="estadisticas"   element={<Dashboard />} />
+          <Route path="cobranzas" element={<Deudores />} />
         </Route>
       </Routes>
     </HashRouter>

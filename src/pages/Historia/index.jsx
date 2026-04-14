@@ -149,7 +149,6 @@ export default function Historia() {
     } 
   }, [eventoViendo]);
 
-  // LOGICA MATEMÁTICA CORREGIDA: No anula el switch manual
   useEffect(() => {
     const recalcular = (estadoActual) => {
       const montoTotal = Number(estadoActual.monto) || 0;
@@ -158,9 +157,12 @@ export default function Historia() {
       const debe = montoTotal - totalPagado;
       
       let nuevoPagado = estadoActual.pagado;
-      // Solo cambia automáticamente a "Si" si pagó todo. 
-      // PERO NUNCA lo vuelve a "No" automáticamente, así respeta si el usuario hace clic manual.
-      if (montoTotal > 0 && debe <= 0) nuevoPagado = 'Si';
+      if (montoTotal > 0 && debe <= 0) {
+        nuevoPagado = 'Si';
+      }
+      if (montoTotal > 0 && debe > 0) {
+        nuevoPagado = 'No';
+      }
       
       if (nuevoPagado !== estadoActual.pagado) {
         return { ...estadoActual, pagado: nuevoPagado };
@@ -262,15 +264,10 @@ export default function Historia() {
 
   if (!dni) return (<div style={{ textAlign: 'center', padding: 60, color: 'var(--text2)' }}>Seleccioná un paciente.<br /><button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => navigate('/pacientes')}>Ir a Pacientes</button></div>)
 
-  // ============================================================================
-  // COMPONENTE: PANEL DE PAGOS (Se usa al crear y al editar)
-  // ============================================================================
   const renderPanelPagos = (estadoForm, setEstadoForm, esEdicion = false) => {
     const montoTotal = Number(estadoForm.monto) || 0;
     const arrayPagos = parsePagos(estadoForm.pagos_detalle);
     const totalPagado = arrayPagos.reduce((acc, p) => acc + Number(p.monto), 0);
-    
-    // Acá es donde la visualización de la deuda respeta el Switch "SÍ"
     const debe = estadoForm.pagado === 'Si' ? 0 : (montoTotal - totalPagado);
     
     return (
@@ -357,7 +354,6 @@ export default function Historia() {
   if (eventoViendo) {
     const pagosLeidos = parsePagos(eventoViendo.pagos_detalle);
     const totalPagado = pagosLeidos.reduce((acc, p) => acc + Number(p.monto), 0);
-    // Acá también respeta el Switch
     const debe = eventoViendo.pagado === 'Si' ? 0 : (Number(eventoViendo.monto || 0) - totalPagado);
 
     return (
@@ -435,11 +431,15 @@ export default function Historia() {
   }
 
   // ============================================================================
-  // RENDER: VISTA PRINCIPAL (Creación)
+  // RENDER: VISTA PRINCIPAL (Creación y Lista)
   // ============================================================================
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      
+      {/* ACÁ ESTABA EL ERROR: ESTAS DOS LÍNEAS FALTABAN EN LA VISTA PRINCIPAL */}
+      {adjuntosEvento && <PanelAdjuntos dni={dni} idAdjunto={adjuntosEvento} onClose={() => setAdjuntosEvento(null)} titulo="Archivos de la Intervención" />}
+      {adjuntosPago && <PanelAdjuntos dni={dni} idAdjunto={adjuntosPago} onClose={() => setAdjuntosPago(null)} titulo="Comprobantes de Pago" />}
 
       <div className="page-header"><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button className="btn btn-secondary btn-sm" onClick={() => navigate('/pacientes')}><ArrowLeft size={14} /> Volver</button><div><div className="page-title">{nombrePaciente}</div><div className="page-subtitle">DNI: {dni} · Historia Clínica</div></div></div></div>
 

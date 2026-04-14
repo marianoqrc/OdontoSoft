@@ -6,41 +6,47 @@
   "scripts": {
     "dev": "vite",
     "vite": "vite",
-"electron": "wait-on http://localhost:5173 && set NODE_ENV=development && electron .",
+    "electron": "wait-on http://localhost:5173 && set NODE_ENV=development && electron .",
     "build": "vite build && electron-builder",
     "preview": "vite preview"
   },
   "build": {
-  "appId": "com.odontosoft.app",
-  "productName": "OdontoSoft",
-  "directories": {
-    "output": "release"
-  },
-  "extraResources": [
-    {
-      "from": "backend",
-      "to": "backend",
-      "filter": ["**/*", "!__pycache__", "!*.pyc", "!datos"]
-    }
-  ],
-  "win": {
-    "target": "nsis"
-  },
-  "linux": {
-    "target": "AppImage"
-  },
-  "files": [
-    "dist/**/*",
-    "electron/**/*"
-  ]
+    "appId": "com.odontosoft.app",
+    "productName": "OdontoSoft",
+    "directories": {
+      "output": "release"
+    },
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!__pycache__",
+          "!*.pyc",
+          "!datos"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ]
   },
   "dependencies": {
+    "date-fns": "^3.6.0",
+    "lucide-react": "^0.383.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.23.1",
-    "xlsx": "^0.18.5",
-    "date-fns": "^3.6.0",
-    "lucide-react": "^0.383.0"
+    "recharts": "^3.8.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
