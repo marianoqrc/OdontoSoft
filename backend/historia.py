@@ -21,8 +21,15 @@ def leer_historia(dni):
     
     return [dict(row) for row in rows]
 
+import json
+from datetime import datetime
+from config import DATA_DIR, get_db_connection
+from werkzeug.utils import secure_filename
+import os
+
+# ... (tus otras funciones de carpetas y leer_historia) ...
+
 def agregar_evento(dni, evento):
-    """Agrega un evento a la historia clínica en SQLite."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT dni FROM pacientes WHERE dni = ?", (dni,))
@@ -32,20 +39,19 @@ def agregar_evento(dni, evento):
 
     try:
         id_adjunto = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        id_adjunto_pago = datetime.now().strftime("PAGO_%Y-%m-%d_%H%M%S")
         fecha = datetime.now().isoformat()
         
         piezas_raw = evento.get("piezas", [])
-        if isinstance(piezas_raw, list):
-            piezas_str = ",".join(str(p) for p in piezas_raw)
-        else:
-            piezas_str = str(piezas_raw)
+        piezas_str = ",".join(str(p) for p in piezas_raw) if isinstance(piezas_raw, list) else str(piezas_raw)
 
+        # ACÁ GUARDAMOS TODO EN LA BDD AL CREAR LA INTERVENCIÓN
         cursor.execute('''
             INSERT INTO historia (
                 dni, fecha, piezas, procedimiento, descripcion, profesional, id_adjunto,
-                monto, forma_pago, financiacion, pagado
+                monto, pagos_detalle, tiene_financiacion, cuotas, pagado, id_adjunto_pago
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             dni,
             fecha,
@@ -55,37 +61,34 @@ def agregar_evento(dni, evento):
             evento.get("profesional", ""),
             id_adjunto,
             evento.get("monto", ""),               
-            evento.get("forma_pago", ""),          
-            evento.get("financiacion", ""),
-            evento.get("pagado", "No")             # NUEVO CAMPO
+            evento.get("pagos_detalle", "[]"),     
+            evento.get("tiene_financiacion", "No"),
+            evento.get("cuotas", ""),
+            evento.get("pagado", "No"),
+            id_adjunto_pago
         ))
 
         conn.commit()
-        return {"ok": True, "id_adjunto": id_adjunto}
-
-    except Exception as e:
-        print(f"Error al guardar historia: {e}")
-        raise
+        return {"ok": True, "id_adjunto": id_adjunto, "id_adjunto_pago": id_adjunto_pago}
     finally:
         conn.close()
 
-# NUEVA FUNCIÓN PARA EDITAR LA PLATA DE UN EVENTO VIEJO
 def actualizar_facturacion(id_evento, datos):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # Recuperar el ID de la carpeta de pagos o crear uno nuevo
         cursor.execute("SELECT id_adjunto_pago FROM historia WHERE id = ?", (id_evento,))
         row = cursor.fetchone()
         id_adjunto_pago = row["id_adjunto_pago"] if row and row["id_adjunto_pago"] else datetime.now().strftime("PAGO_%Y-%m-%d_%H%M%S")
 
+        # ACÁ ACTUALIZAMOS LA BDD CUANDO EDITAMOS LA CAJA
         cursor.execute('''
             UPDATE historia 
             SET monto = ?, pagos_detalle = ?, tiene_financiacion = ?, cuotas = ?, pagado = ?, id_adjunto_pago = ?
             WHERE id = ?
         ''', (
             datos.get("monto", ""),
-            datos.get("pagos_detalle", "[]"), # ACÁ SE GUARDAN LOS PARCIALES
+            datos.get("pagos_detalle", "[]"),
             datos.get("tiene_financiacion", "No"),
             datos.get("cuotas", ""),
             datos.get("pagado", "No"),

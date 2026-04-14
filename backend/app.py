@@ -1,4 +1,3 @@
-from flask import Flask, jsonify, request
 from flask_cors import CORS
 import pacientes as pac
 from config import init_data_dir
@@ -11,6 +10,7 @@ from flask import send_file as flask_send_file
 import json
 import os
 from historia import actualizar_facturacion
+from flask import Flask, jsonify, request
 #D:\soft\odontosoft\backend> d:\soft\odontosoft\backend\.venv\Scripts\python.exe app.py
 
 app = Flask(__name__)
@@ -20,40 +20,53 @@ init_data_dir()
 @app.route('/historia/editar_caja/<int:id_evento>', methods=['POST'])
 def api_editar_facturacion(id_evento):
     try:
-        # Extraemos los datos del formulario que manda React
+        import historia as hist
+        
+        # Atrapamos los datos editados
         datos = {
             "monto": request.form.get("monto", ""),
-            "forma_pago": request.form.get("forma_pago", ""),
-            "financiacion": request.form.get("financiacion", ""),
+            "pagos_detalle": request.form.get("pagos_detalle", "[]"),
+            "tiene_financiacion": request.form.get("tiene_financiacion", "No"),
+            "cuotas": request.form.get("cuotas", ""),
             "pagado": request.form.get("pagado", "No")
         }
-        resultado = actualizar_facturacion(id_evento, datos)
+        
+        resultado = hist.actualizar_facturacion(id_evento, datos)
+        
+        dni = request.form.get("dni") 
+        archivos_pago = request.files.getlist("archivos_pago")
+        if archivos_pago and dni:
+            hist.guardar_adjuntos(dni, resultado["id_adjunto_pago"], archivos_pago)
+            
         return jsonify(resultado), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route("/pacientes", methods=["GET"])
-def get_pacientes():
-    buscar = request.args.get("q", "").lower()
-    lista = pac.listar_pacientes()
-    if buscar:
-        lista = [p for p in lista if
-            buscar in str(p.get("dni", "")).lower() or
-            buscar in str(p.get("nombre", "")).lower() or
-            buscar in str(p.get("apellido", "")).lower()
-        ]
-    return jsonify(lista)
 
-@app.route("/pacientes", methods=["POST"])
-def crear_paciente():
+@app.route("/pacientes", methods=["GET", "POST"])
+def manejar_pacientes():
     try:
-        datos = request.get_json()
-        resultado = pac.guardar_paciente(datos)
-        return jsonify(resultado), 201
+        import pacientes as pac
+        
+        # SI REACT PIDE LA LISTA DE PACIENTES
+        if request.method == "GET":
+            lista = pac.listar_pacientes()
+            return jsonify(lista), 200
+            
+        # SI REACT MANDA UN PACIENTE NUEVO PARA GUARDAR
+        if request.method == "POST":
+            # Si manda JSON lo leemos como JSON, si no, como Form (para atajar cualquier cosa)
+            datos = request.json if request.is_json else request.form.to_dict()
+            resultado = pac.guardar_paciente(datos)
+            return jsonify(resultado), 201
+            
     except PermissionError as e:
         return jsonify({"error": str(e)}), 423
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"Error inesperado en pacientes: {e}")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 @app.route("/pacientes/<dni>", methods=["PUT"])
 def actualizar_paciente(dni):
@@ -89,59 +102,40 @@ def post_evento(dni):
         import json
         import historia as hist
 
-        # 1. Leer datos básicos del FormData
         procedimiento = request.form.get('procedimiento', '')
         descripcion   = request.form.get('descripcion', '')
         
-        # Procesar piezas (a veces viene como JSON, a veces como string con comas)
         piezas_raw = request.form.get('piezas', '[]')
         try:
             piezas = json.loads(piezas_raw)
         except json.JSONDecodeError:
             piezas = piezas_raw.split(',') if piezas_raw else []
 
-        # 2. Leer los NUEVOS campos de facturación
-        monto = request.form.get('monto', '')
-        pagado = request.form.get('pagado', 'No')
-        pagos_detalle = request.form.get('pagos_detalle', '[]')
-        tiene_financiacion = request.form.get('tiene_financiacion', 'No')
-        cuotas = request.form.get('cuotas', '')
-
-        # 3. Armar el diccionario completo para mandarlo a SQLite
+        # Atrapamos los datos de la caja
         evento = {
             'procedimiento': procedimiento,
             'descripcion':   descripcion,
             'piezas':        piezas,
-            'monto':         monto,
-            'pagado':        pagado,
-            'pagos_detalle': pagos_detalle,
-            'tiene_financiacion': tiene_financiacion,
-            'cuotas':        cuotas
+            'monto':         request.form.get('monto', ''),
+            'pagado':        request.form.get('pagado', 'No'),
+            'pagos_detalle': request.form.get('pagos_detalle', '[]'),
+            'tiene_financiacion': request.form.get('tiene_financiacion', 'No'),
+            'cuotas':        request.form.get('cuotas', '')
         }
 
-        # 4. Guardar en SQLite
         resultado = hist.agregar_evento(dni, evento)
 
-        # 5. Guardar fotos/radiografías clínicas (usando la función centralizada)
         archivos = request.files.getlist('archivos')
         if archivos and resultado.get('id_adjunto'):
             hist.guardar_adjuntos(dni, resultado['id_adjunto'], archivos)
 
-        # 6. Guardar comprobantes de pago separados
         archivos_pago = request.files.getlist('archivos_pago')
         if archivos_pago and resultado.get('id_adjunto_pago'):
             hist.guardar_adjuntos(dni, resultado['id_adjunto_pago'], archivos_pago)
 
-        print("Evento guardado OK:", resultado) 
         return jsonify(resultado), 201
-
-    except PermissionError as e:
-        return jsonify({"error": str(e)}), 423
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
     except Exception as e:
-        print(f"Error inesperado en post_evento: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 400
 
 @app.route("/exportar", methods=["GET"])
 def exportar():
