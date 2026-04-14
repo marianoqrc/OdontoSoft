@@ -3,6 +3,7 @@ import random
 import json
 from datetime import datetime, timedelta
 from faker import Faker
+from config import inicializar_base_datos
 
 # Ajustá esto si tu base de datos está en otra ruta
 DB_PATH = 'data/odontosoft.db' 
@@ -79,6 +80,14 @@ def generar_pagos_parciales(monto_total, pagado_str):
 
 def sembrar_datos_completos(cantidad_pacientes=50):
     print(f"🌱 Sembrando {cantidad_pacientes} pacientes con historias clínicas complejas...")
+
+    
+    # AGREGÁ ESTA LÍNEA ACÁ PARA QUE CREE LAS TABLAS SI NO EXISTEN
+    inicializar_base_datos() 
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # ... sigue tu código normal ...
     
     conn = get_db_connection()
     cursor = conn.cursor()
