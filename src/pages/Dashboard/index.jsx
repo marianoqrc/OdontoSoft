@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../utils/api.js';
+import { api } from '../../utils/api.js';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList } from 'recharts';
 import { DollarSign, AlertCircle, TrendingUp, CheckCircle, Calendar } from 'lucide-react';
 

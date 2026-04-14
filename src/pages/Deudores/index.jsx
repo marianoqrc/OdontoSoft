@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from "../utils/api.js";
+import { api } from "../../utils/api.js";
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, AlertTriangle, ArrowRight, User } from 'lucide-react';
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Save, Paperclip, FileText, Trash2, X, Image as ImageIcon, Edit3, DollarSign } from 'lucide-react'
+import { ArrowLeft, Plus, Save, Paperclip, FileText, Trash2, X, Image as ImageIcon, Edit3, DollarSign, Printer } from 'lucide-react'
+import { useReactToPrint } from 'react-to-print'
 import { api } from '../../utils/api.js'
 import Odontograma, { COLORES } from '../../components/Odontograma.jsx'
 import Toast from '../../components/Toast.jsx'
@@ -42,8 +43,6 @@ function formatearPiezas(piezasStr) {
   }).join(' + ');
 }
 
-const FORM_VACIO = { procedimiento: '', descripcion: '', orto_mordida: '', orto_tipo_aparato: '', orto_subtipo_aparato: '', orto_plan: '', orto_tiempo: '', monto: '', pagos_detalle: [], tiene_financiacion: 'No', cuotas: '', pagado: 'No' }
-
 function PanelAdjuntos({ dni, idAdjunto, onClose, titulo = "Archivos adjuntos" }) {
   const [archivos, setArchivos] = useState([]); const [subiendo, setSubiendo] = useState(false); const [archivoViendo, setArchivoViendo] = useState(null); const inputRef = useRef();
   useEffect(() => { cargar() }, [idAdjunto]);
@@ -84,6 +83,8 @@ function PanelAdjuntos({ dni, idAdjunto, onClose, titulo = "Archivos adjuntos" }
   )
 }
 
+const FORM_VACIO = { procedimiento: '', descripcion: '', orto_mordida: '', orto_tipo_aparato: '', orto_subtipo_aparato: '', orto_plan: '', orto_tiempo: '', monto: '', pagos_detalle: [], tiene_financiacion: 'No', cuotas: '', pagado: 'No' }
+
 export default function Historia() {
   const [params] = useSearchParams(); const navigate = useNavigate(); const dni = params.get('dni'); const nombrePaciente = params.get('nombre');
   const [historia, setHistoria] = useState([]); const [estadosPiezas, setEstadosPiezas] = useState({}); const [seleccionadas, setSeleccionadas] = useState({}); 
@@ -97,6 +98,13 @@ export default function Historia() {
   const [nuevoPago, setNuevoPago] = useState({ monto: '', metodo: 'Transferencia' });
   const [modoOdontograma, setModoOdontograma] = useState('ADULTO'); 
   const fileInputRef = useRef(); const fileInputPagoRef = useRef();
+  
+  // REFERENCIA PARA GENERAR EL PDF
+  const informeRef = useRef();
+  const generarPDF = useReactToPrint({
+    content: () => informeRef.current,
+    documentTitle: `Historia_Clinica_${dni || 'Paciente'}`,
+  });
 
   useEffect(() => {
     async function fetchPacienteInfo() { 
@@ -155,21 +163,12 @@ export default function Historia() {
       const pagosArray = parsePagos(estadoActual.pagos_detalle);
       const totalPagado = pagosArray.reduce((acc, p) => acc + Number(p.monto), 0);
       const debe = montoTotal - totalPagado;
-      
       let nuevoPagado = estadoActual.pagado;
-      if (montoTotal > 0 && debe <= 0) {
-        nuevoPagado = 'Si';
-      }
-      if (montoTotal > 0 && debe > 0) {
-        nuevoPagado = 'No';
-      }
-      
-      if (nuevoPagado !== estadoActual.pagado) {
-        return { ...estadoActual, pagado: nuevoPagado };
-      }
+      if (montoTotal > 0 && debe <= 0) nuevoPagado = 'Si';
+      if (montoTotal > 0 && debe > 0) nuevoPagado = 'No';
+      if (nuevoPagado !== estadoActual.pagado) return { ...estadoActual, pagado: nuevoPagado };
       return estadoActual;
     };
-
     if(!editandoCaja) setForm(prev => recalcular(prev));
     else setFormCaja(prev => recalcular(prev));
   }, [form.pagos_detalle, form.monto, formCaja.pagos_detalle, formCaja.monto, editandoCaja]);
@@ -187,12 +186,8 @@ export default function Historia() {
     else setForm(f => ({ ...f, pagos_detalle: parsePagos(f.pagos_detalle).filter(p => p.id !== idPago) }));
   }
 
-  function toggleSeccion(idSeccion, pincel) { 
-    setSeleccionadas(prev => { const next = { ...prev }; if (next[idSeccion] === pincel) delete next[idSeccion]; else next[idSeccion] = pincel; return next; }) 
-  }
-  
+  function toggleSeccion(idSeccion, pincel) { setSeleccionadas(prev => { const next = { ...prev }; if (next[idSeccion] === pincel) delete next[idSeccion]; else next[idSeccion] = pincel; return next; }) }
   const campo = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }))
-
   const handleFileChange = (e, esPago = false) => { const files = Array.from(e.target.files); if (files.length > 0) esPago ? setArchivosPagoNuevos(p => [...p, ...files]) : setArchivosNuevos(p => [...p, ...files]); e.target.value = null; }
   const removerArchivoNuevo = (index, esPago = false) => { esPago ? setArchivosPagoNuevos(p => p.filter((_, i) => i !== index)) : setArchivosNuevos(p => p.filter((_, i) => i !== index)); }
 
@@ -204,7 +199,6 @@ export default function Historia() {
       const estadoFinal = { ...estadosPiezas, ...seleccionadas };
       const arrayParaBackend = Object.entries(estadoFinal).filter(([id, est]) => est && est !== 'sano').map(([id, est]) => `${id}:${est}`);
       formData.append('piezas', arrayParaBackend.join(',')); 
-      
       let descripcionFinal = form.descripcion;
       if (form.procedimiento === 'Ortodoncia') { 
         const detallesOrto = []; 
@@ -214,17 +208,13 @@ export default function Historia() {
         if (form.orto_tiempo) detallesOrto.push(`Tiempo est.: ${form.orto_tiempo}`); 
         if (detallesOrto.length > 0) descripcionFinal = `[DETALLE ORTODONCIA]\n${detallesOrto.join('\n')}\n\n[NOTAS ADICIONALES]\n${form.descripcion}`; 
       }
-      
       formData.append('descripcion', descripcionFinal); formData.append('monto', form.monto); formData.append('pagado', form.pagado);
       formData.append('pagos_detalle', JSON.stringify(form.pagos_detalle));
       formData.append('tiene_financiacion', form.tiene_financiacion); formData.append('cuotas', form.cuotas);
-
       archivosNuevos.forEach(file => { formData.append('archivos', file); });
       archivosPagoNuevos.forEach(file => { formData.append('archivos_pago', file); });
-
       const res = await fetch(`http://localhost:5050/historia/${dni}`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error((await res.json()).error || 'Error al guardar');
-
       setToast({ msg: 'Evento registrado correctamente', type: 'success' })
       setForm(FORM_VACIO); setSeleccionadas({}); setArchivosNuevos([]); setArchivosPagoNuevos([]); cargarHistoria();
     } catch (e) { setToast({ msg: e.message, type: 'error' }) } finally { setGuardando(false) }
@@ -233,20 +223,16 @@ export default function Historia() {
   async function guardarEdicionCaja() {
     setGuardandoCaja(true);
     try {
-      const formData = new FormData();
-      formData.append('dni', dni); 
+      const formData = new FormData(); formData.append('dni', dni); 
       formData.append('monto', formCaja.monto); formData.append('pagado', formCaja.pagado);
       formData.append('pagos_detalle', JSON.stringify(formCaja.pagos_detalle));
       formData.append('tiene_financiacion', formCaja.tiene_financiacion); formData.append('cuotas', formCaja.cuotas);
       archivosPagoNuevos.forEach(file => { formData.append('archivos_pago', file); });
-
       const res = await fetch(`http://localhost:5050/historia/editar_caja/${eventoViendo.id}`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Error al actualizar facturación');
-
       setToast({ msg: 'Facturación actualizada', type: 'success' });
       setEditandoCaja(false); setArchivosPagoNuevos([]); 
-      setEventoViendo(prev => ({ ...prev, ...formCaja })); 
-      cargarHistoria();
+      setEventoViendo(prev => ({ ...prev, ...formCaja })); cargarHistoria();
     } catch (e) { setToast({ msg: e.message, type: 'error' }); } finally { setGuardandoCaja(false); }
   }
 
@@ -282,12 +268,10 @@ export default function Historia() {
             </div>
           </div>
         </div>
-        
         <div className="form-group">
           <label>Monto Total ($)</label>
           <input type="number" placeholder="Ej: 15000" value={estadoForm.monto} onChange={(e) => setEstadoForm(f => ({...f, monto: e.target.value}))} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: 16, fontWeight: 600 }}/>
         </div>
-        
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>¿FINANCIACIÓN?</span>
           <div style={{ display: 'flex', background: 'var(--surface2)', borderRadius: 20, border: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -300,13 +284,11 @@ export default function Historia() {
             </select>
           )}
         </div>
-
         <div style={{ marginTop: 8, background: '#fff', borderRadius: 6, border: '1px solid var(--border)', padding: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Pagos Parciales</span>
              <span style={{ fontSize: 11, fontWeight: 700, color: debe > 0 ? '#dc2626' : '#047857' }}>{debe > 0 ? `DEUDA: $${debe}` : 'SALDADO'}</span>
           </div>
-          
           {arrayPagos.length === 0 && <div style={{ fontSize: 12, color: 'var(--text3)' }}>No se registraron pagos todavía.</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
             {arrayPagos.map(p => (
@@ -316,7 +298,6 @@ export default function Historia() {
               </div>
             ))}
           </div>
-          
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}><label style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>Monto ($)</label><input type="number" value={nuevoPago.monto} onChange={e => setNuevoPago({...nuevoPago, monto: e.target.value})} style={{ width: '100%', padding: '6px', borderRadius: 4, border: '1px solid var(--border)' }}/></div>
             <div style={{ flex: 1 }}><label style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>Método</label>
@@ -327,7 +308,6 @@ export default function Historia() {
             <button type="button" onClick={() => agregarPago(esEdicion)} className="btn btn-sm" style={{ background: 'var(--primary-light)', color: 'var(--primary)', height: 32, padding: '0 12px' }}>Añadir</button>
           </div>
         </div>
-
         <div style={{ marginTop: '4px' }}>
           <input type="file" multiple ref={esEdicion ? fileInputPagoRef : fileInputPagoRef} onChange={(e) => handleFileChange(e, true)} style={{ display: 'none' }} />
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => esEdicion ? fileInputPagoRef.current.click() : fileInputPagoRef.current.click()} style={{ padding: '6px 12px', marginBottom: '8px', width: '100%', justifyContent: 'center' }}>
@@ -349,7 +329,7 @@ export default function Historia() {
   }
 
   // ============================================================================
-  // RENDER: VISTA DE DETALLE DEL EVENTO
+  // RENDER: VISTA DE DETALLE DEL EVENTO (ACÁ VA EL PDF)
   // ============================================================================
   if (eventoViendo) {
     const pagosLeidos = parsePagos(eventoViendo.pagos_detalle);
@@ -362,68 +342,94 @@ export default function Historia() {
         {adjuntosEvento && <PanelAdjuntos dni={dni} idAdjunto={adjuntosEvento} onClose={() => setAdjuntosEvento(null)} titulo="Archivos de la Intervención" />}
         {adjuntosPago && <PanelAdjuntos dni={dni} idAdjunto={adjuntosPago} onClose={() => setAdjuntosPago(null)} titulo="Comprobantes de Pago" />}
 
-        <div className="page-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button className="btn btn-secondary btn-sm" onClick={() => setEventoViendo(null)}><ArrowLeft size={14} /> Volver a Historia Clínica</button><div><div className="page-title">{eventoViendo.procedimiento}</div><div className="page-subtitle">Fecha: {new Date(eventoViendo.fecha).toLocaleDateString('es-AR')} · Paciente: {nombrePaciente}</div></div></div>
+        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setEventoViendo(null)}>
+              <ArrowLeft size={14} /> Volver a Historia Clínica
+            </button>
+            <div>
+              <div className="page-title">{eventoViendo.procedimiento}</div>
+              <div className="page-subtitle">Fecha: {new Date(eventoViendo.fecha).toLocaleDateString('es-AR')} · Paciente: {nombrePaciente}</div>
+            </div>
+          </div>
+          {/* BOTÓN PARA GENERAR EL PDF */}
+          <button className="btn btn-primary" onClick={generarPDF}>
+            <Printer size={16} /> Imprimir / PDF
+          </button>
         </div>
 
-        <div className="card" style={{ padding: 24, marginBottom: 20 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Odontograma de la intervención</div>
-          <div style={{ pointerEvents: 'none', display: 'flex', justifyContent: 'center' }}><Odontograma modoInicial={modoOdontograma} estados={getEstadosLectura(eventoViendo)} seleccionadas={{}} onToggleSeccion={() => {}} onSetSeleccionadas={() => {}} soloLectura={true}/></div>
-          <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 16, background: 'var(--surface2)', padding: 12, borderRadius: 8 }}><strong>Piezas tratadas: </strong> {formatearPiezas(eventoViendo.piezas)}</div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr', gap: 20 }}>
-          <div className="card" style={{ padding: 24 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', marginBottom: 12, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Descripción / Notas</div>
-            <div style={{ fontSize: 14, color: 'var(--text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{eventoViendo.descripcion || 'Sin notas adicionales.'}</div>
-            {eventoViendo.id_adjunto && (
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--surface2)' }}>
-                <button className="btn" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }} onClick={() => setAdjuntosEvento(eventoViendo.id_adjunto)}><Paperclip size={14} /> Ver archivos adjuntos</button>
-              </div>
-            )}
+        {/* ESTE DIV ENVOLTURA ES EL QUE SE MANDA A IMPRIMIR */}
+        <div ref={informeRef} style={{ background: '#fff', padding: '30px', borderRadius: '8px' }}>
+          
+          {/* ENCABEZADO EXCLUSIVO PARA EL PDF (Solo se ve bien al imprimir o en fondo blanco) */}
+          <div style={{ borderBottom: '2px solid var(--border)', paddingBottom: '16px', marginBottom: '24px' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--primary-dark)' }}>Resumen de Intervención Clínica</div>
+            <div style={{ fontSize: 14, color: '#475569', marginTop: 8 }}>
+              <strong>Paciente:</strong> {nombrePaciente} (DNI: {dni}) <br />
+              <strong>Fecha del procedimiento:</strong> {new Date(eventoViendo.fecha).toLocaleDateString('es-AR')} <br />
+              <strong>Procedimiento:</strong> {eventoViendo.procedimiento}
+            </div>
           </div>
 
-          <div className="card" style={{ padding: 24, background: eventoViendo.pagado === 'Si' ? '#f0fdf4' : '#fffbeb', border: `1px solid ${eventoViendo.pagado === 'Si' ? '#bbf7d0' : '#fde68a'}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: `1px solid ${eventoViendo.pagado === 'Si' ? '#bbf7d0' : '#fde68a'}`, paddingBottom: '8px' }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: eventoViendo.pagado === 'Si' ? '#047857' : '#b45309' }}>Facturación</div>
-              {!editandoCaja && <button className="btn btn-sm" style={{ background: 'transparent', border: 'none', color: '#64748b', padding: 0 }} onClick={() => setEditandoCaja(true)} title="Editar cobro"><Edit3 size={16} /></button>}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Odontograma de la intervención</div>
+            <div style={{ pointerEvents: 'none', display: 'flex', justifyContent: 'center' }}><Odontograma modoInicial={modoOdontograma} estados={getEstadosLectura(eventoViendo)} seleccionadas={{}} onToggleSeccion={() => {}} onSetSeleccionadas={() => {}} soloLectura={true}/></div>
+            <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 16, background: 'var(--surface2)', padding: 12, borderRadius: 8 }}><strong>Piezas tratadas: </strong> {formatearPiezas(eventoViendo.piezas)}</div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr', gap: 20 }}>
+            <div style={{ border: '1px solid var(--border)', padding: 24, borderRadius: 8 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', marginBottom: 12, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Descripción / Notas</div>
+              <div style={{ fontSize: 14, color: 'var(--text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{eventoViendo.descripcion || 'Sin notas adicionales.'}</div>
+              {eventoViendo.id_adjunto && (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--surface2)' }} className="no-print">
+                  <button className="btn" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }} onClick={() => setAdjuntosEvento(eventoViendo.id_adjunto)}><Paperclip size={14} /> Ver archivos adjuntos</button>
+                </div>
+              )}
             </div>
 
-            {editandoCaja ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {renderPanelPagos(formCaja, setFormCaja, true)}
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button className="btn btn-sm btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setEditandoCaja(false)}>Cancelar</button>
-                  <button className="btn btn-sm btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={guardarEdicionCaja} disabled={guardandoCaja}>Guardar Cambios</button>
-                </div>
+            <div style={{ padding: 24, borderRadius: 8, background: eventoViendo.pagado === 'Si' ? '#f0fdf4' : '#fffbeb', border: `1px solid ${eventoViendo.pagado === 'Si' ? '#bbf7d0' : '#fde68a'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: `1px solid ${eventoViendo.pagado === 'Si' ? '#bbf7d0' : '#fde68a'}`, paddingBottom: '8px' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: eventoViendo.pagado === 'Si' ? '#047857' : '#b45309' }}>Facturación</div>
+                {!editandoCaja && <button className="btn btn-sm no-print" style={{ background: 'transparent', border: 'none', color: '#64748b', padding: 0 }} onClick={() => setEditandoCaja(true)} title="Editar cobro"><Edit3 size={16} /></button>}
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: eventoViendo.pagado === 'Si' ? '#10b981' : '#f59e0b' }} />
-                  <span style={{ fontWeight: 600, fontSize: 13, color: eventoViendo.pagado === 'Si' ? '#047857' : '#b45309' }}>{eventoViendo.pagado === 'Si' ? 'PAGO COMPLETADO' : 'PAGO PENDIENTE'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed var(--border)', paddingBottom: 8 }}>
-                  <div><div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600 }}>Monto Total</div><div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{eventoViendo.monto ? `$${eventoViendo.monto}` : 'No especificado'}</div></div>
-                  <div style={{ textAlign: 'right' }}><div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600 }}>Deuda</div><div style={{ fontSize: 16, fontWeight: 700, color: debe > 0 ? '#dc2626' : '#047857' }}>${debe}</div></div>
-                </div>
-                
-                {eventoViendo.tiene_financiacion === 'Si' && <div><div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600 }}>Financiación</div><div style={{ fontSize: 14, color: 'var(--text)' }}>{eventoViendo.cuotas || 'Sí'}</div></div>}
-                
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Pagos Registrados</div>
-                  {pagosLeidos.length === 0 ? <div style={{ fontSize: 13, color: 'var(--text2)' }}>Sin pagos registrados.</div> : 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {pagosLeidos.map(p => ( <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', fontSize: 13 }}><span>{p.metodo} <span style={{fontSize: 10, color: 'var(--text3)'}}>({p.fecha})</span></span><strong>${p.monto}</strong></div> ))}
-                    </div>
-                  }
-                </div>
 
-                {eventoViendo.id_adjunto_pago && (
-                   <button className="btn btn-sm" style={{ background: '#fff', color: '#047857', border: '1px solid #047857', marginTop: 8, justifyContent: 'center' }} onClick={() => setAdjuntosPago(eventoViendo.id_adjunto_pago)}><DollarSign size={14} /> Ver Comprobantes de Pago</button>
-                )}
-              </div>
-            )}
+              {editandoCaja ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {renderPanelPagos(formCaja, setFormCaja, true)}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button className="btn btn-sm btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setEditandoCaja(false)}>Cancelar</button>
+                    <button className="btn btn-sm btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={guardarEdicionCaja} disabled={guardandoCaja}>Guardar</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: eventoViendo.pagado === 'Si' ? '#10b981' : '#f59e0b' }} />
+                    <span style={{ fontWeight: 600, fontSize: 13, color: eventoViendo.pagado === 'Si' ? '#047857' : '#b45309' }}>{eventoViendo.pagado === 'Si' ? 'PAGO COMPLETADO' : 'PAGO PENDIENTE'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed var(--border)', paddingBottom: 8 }}>
+                    <div><div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600 }}>Monto Total</div><div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{eventoViendo.monto ? `$${eventoViendo.monto}` : 'No especificado'}</div></div>
+                    <div style={{ textAlign: 'right' }}><div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600 }}>Deuda</div><div style={{ fontSize: 16, fontWeight: 700, color: debe > 0 ? '#dc2626' : '#047857' }}>${debe}</div></div>
+                  </div>
+                  
+                  {eventoViendo.tiene_financiacion === 'Si' && <div><div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600 }}>Financiación</div><div style={{ fontSize: 14, color: 'var(--text)' }}>{eventoViendo.cuotas || 'Sí'}</div></div>}
+                  
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Pagos Registrados</div>
+                    {pagosLeidos.length === 0 ? <div style={{ fontSize: 13, color: 'var(--text2)' }}>Sin pagos registrados.</div> : 
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {pagosLeidos.map(p => ( <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', fontSize: 13 }}><span>{p.metodo} <span style={{fontSize: 10, color: 'var(--text3)'}}>({p.fecha})</span></span><strong>${p.monto}</strong></div> ))}
+                      </div>
+                    }
+                  </div>
+
+                  {eventoViendo.id_adjunto_pago && (
+                     <button className="btn btn-sm no-print" style={{ background: '#fff', color: '#047857', border: '1px solid #047857', marginTop: 8, justifyContent: 'center' }} onClick={() => setAdjuntosPago(eventoViendo.id_adjunto_pago)}><DollarSign size={14} /> Ver Comprobantes</button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -436,8 +442,6 @@ export default function Historia() {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-      
-      {/* ACÁ ESTABA EL ERROR: ESTAS DOS LÍNEAS FALTABAN EN LA VISTA PRINCIPAL */}
       {adjuntosEvento && <PanelAdjuntos dni={dni} idAdjunto={adjuntosEvento} onClose={() => setAdjuntosEvento(null)} titulo="Archivos de la Intervención" />}
       {adjuntosPago && <PanelAdjuntos dni={dni} idAdjunto={adjuntosPago} onClose={() => setAdjuntosPago(null)} titulo="Comprobantes de Pago" />}
 
@@ -468,7 +472,6 @@ export default function Historia() {
             <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> Registrar intervención</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="form-group"><label>Procedimiento *</label><select value={form.procedimiento} onChange={(e) => { setForm(f => ({ ...f, procedimiento: e.target.value, orto_mordida: '', orto_tipo_aparato: '', orto_subtipo_aparato: '', orto_plan: '', orto_tiempo: '' })) }} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)' }}><option value="">Seleccioná...</option>{PROCEDIMIENTOS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-
               {form.procedimiento === 'Ortodoncia' && (
                 <div style={{ background: 'var(--surface2)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '4px' }}>Especificaciones de Ortodoncia</div>
@@ -481,17 +484,13 @@ export default function Historia() {
                   <div className="form-group"><label>Tiempo estimado</label><input type="text" placeholder="Ej: 18 meses" value={form.orto_tiempo} onChange={campo('orto_tiempo')} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }}/></div>
                 </div>
               )}
-
               <div className="form-group"><label>{form.procedimiento === 'Ortodoncia' ? 'Notas adicionales' : 'Descripción / Notas'}</label><textarea rows={3} placeholder="Detalles del procedimiento..." value={form.descripcion} onChange={campo('descripcion')} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', fontFamily: 'inherit' }} /></div>
-
               {renderPanelPagos(form, setForm, false)}
-
               <div style={{ marginTop: '4px' }}>
                 <input type="file" multiple ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current.click()} style={{ padding: '6px 12px', marginBottom: '8px', width: '100%', justifyContent: 'center' }}><Paperclip size={14} style={{ color: 'var(--primary)' }} /> Adjuntar fotos/radiografías clínicas</button>
                 {archivosNuevos.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>{archivosNuevos.map((file, i) => (<div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--surface2)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', border: '1px solid var(--border)' }}><span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span><button type="button" onClick={() => removerArchivoNuevo(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 0 }}><X size={14} /></button></div>))}</div>}
               </div>
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}><button className="btn btn-primary" onClick={guardar} disabled={guardando}><Save size={14} /> {guardando ? 'Guardando...' : 'Guardar intervención'}</button></div>
             </div>
           </div>
@@ -507,14 +506,12 @@ export default function Historia() {
                   <div><div style={{ fontWeight: 600, fontSize: 13, color: 'var(--primary-dark)' }}>{ev.procedimiento || 'Sin procedimiento'}</div><div style={{ fontSize: 11, color: 'var(--text3)' }}>{ev.fecha ? new Date(ev.fecha).toLocaleDateString('es-AR') : ''}</div></div>
                   <button className="btn btn-sm" onClick={() => setEventoViendo(ev)} style={{ padding: '4px 10px', fontSize: '11px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--primary)', fontWeight: 600 }}>Ver detalle</button>
                 </div>
-                
                 {ev.monto && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: ev.pagado === 'Si' ? '#047857' : '#b45309', fontWeight: 600, marginTop: 6, padding: '4px 8px', background: ev.pagado === 'Si' ? '#f0fdf4' : '#fffbeb', borderRadius: '4px', border: `1px solid ${ev.pagado === 'Si' ? '#bbf7d0' : '#fde68a'}` }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.pagado === 'Si' ? '#10b981' : '#f59e0b' }} />
                     Monto: ${ev.monto}
                   </div>
                 )}
-
                 <div style={{ marginTop: '8px', display: 'flex', gap: 6 }}>
                   {ev.id_adjunto && <button className="btn btn-sm" style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', fontSize: 11.5 }} onClick={() => setAdjuntosEvento(ev.id_adjunto)}><Paperclip size={11} /> Clínico</button>}
                   {ev.id_adjunto_pago && <button className="btn btn-sm" style={{ background: '#fff', color: '#047857', border: '1px solid #047857', padding: '4px 10px', fontSize: 11.5 }} onClick={() => setAdjuntosPago(ev.id_adjunto_pago)}><DollarSign size={11} /> Pagos</button>}
