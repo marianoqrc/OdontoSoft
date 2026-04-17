@@ -361,7 +361,7 @@ export default function Historia() {
         {/* ESTE DIV ENVOLTURA ES EL QUE SE MANDA A IMPRIMIR */}
         <div ref={informeRef} style={{ background: '#fff', padding: '30px', borderRadius: '8px' }}>
           
-          {/* ENCABEZADO EXCLUSIVO PARA EL PDF (Solo se ve bien al imprimir o en fondo blanco) */}
+          {/* ENCABEZADO EXCLUSIVO PARA EL PDF */}
           <div style={{ borderBottom: '2px solid var(--border)', paddingBottom: '16px', marginBottom: '24px' }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--primary-dark)' }}>Resumen de Intervención Clínica</div>
             <div style={{ fontSize: 14, color: '#475569', marginTop: 8 }}>
@@ -373,7 +373,19 @@ export default function Historia() {
 
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Odontograma de la intervención</div>
-            <div style={{ pointerEvents: 'none', display: 'flex', justifyContent: 'center' }}><Odontograma modoInicial={modoOdontograma} estados={getEstadosLectura(eventoViendo)} seleccionadas={{}} onToggleSeccion={() => {}} onSetSeleccionadas={() => {}} soloLectura={true}/></div>
+            <div style={{ pointerEvents: 'none', display: 'flex', justifyContent: 'center' }}>
+              {/* ACÁ LE PASAMOS EL NOMBRE Y EL DNI AL COMPONENTE */}
+              <Odontograma 
+                modoInicial={modoOdontograma} 
+                estados={getEstadosLectura(eventoViendo)} 
+                seleccionadas={{}} 
+                onToggleSeccion={() => {}} 
+                onSetSeleccionadas={() => {}} 
+                soloLectura={true}
+                pacienteNombre={nombrePaciente}
+                pacienteDni={dni}
+              />
+            </div>
             <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 16, background: 'var(--surface2)', padding: 12, borderRadius: 8 }}><strong>Piezas tratadas: </strong> {formatearPiezas(eventoViendo.piezas)}</div>
           </div>
 
@@ -451,7 +463,19 @@ export default function Historia() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 13 }}>Odontograma — Seleccioná un color y pintá las caras tratadas</div>
-            <Odontograma key={modoOdontograma} modoInicial={modoOdontograma} estados={estadosPiezas} seleccionadas={seleccionadas} onToggleSeccion={toggleSeccion} onSetSeleccionadas={setSeleccionadas}/>
+            
+            {/* TAMBIÉN LE PASAMOS EL NOMBRE Y DNI AL ODONTOGRAMA PRINCIPAL POR SI IMPRIMEN DESDE AHÍ */}
+            <Odontograma 
+              key={modoOdontograma} 
+              modoInicial={modoOdontograma} 
+              estados={estadosPiezas} 
+              seleccionadas={seleccionadas} 
+              onToggleSeccion={toggleSeccion} 
+              onSetSeleccionadas={setSeleccionadas}
+              pacienteNombre={nombrePaciente}
+              pacienteDni={dni}
+            />
+
             {Object.keys(seleccionadas).length > 0 && (
               <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text2)', lineHeight: 1.8, background: 'var(--surface2)', padding: '10px', borderRadius: '6px' }}>
                 <strong>Estado modificado en esta sesión: </strong>
