@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Calendar as CalendarIcon, CalendarPlus } from 'lucide-react'
 import { format, addDays, subDays, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Modal from '../../components/Modal.jsx'
@@ -176,7 +176,8 @@ export default function AgendarTurno({ onVolver }) {
           <button className="btn btn-secondary btn-sm" onClick={onVolver}>
             <ArrowLeft size={14} /> Volver
           </button>
-          <div className="page-title" style={{ fontWeight: 600 }}>
+          <div className="page-title" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CalendarPlus size={20} color="var(--primary)" />
             Agendar turno - {' '}
             {format(dia, "EEEE d 'de' MMMM yyyy", { locale: es })}
           </div>

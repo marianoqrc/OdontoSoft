@@ -1,30 +1,35 @@
 /* ── Variables globales (Actualizadas a Paleta Dra. Querci) ── */
 :root {
-  /* Fondo general y superficies */
-  --bg: #fdfafb; /* Blanco apenas cálido/rosado */
-  --surface: #ffffff;
-  --surface2: #f8f5f6; /* Gris muy clarito cálido */
-  --border: #e8e0e0;
+  /* 🏥 COLORES PRINCIPALES - Azul Pizarra Profesional */
+  --primary: #334155;        /* Color principal (Botones, íconos, títulos) */
+  --primary-dark: #0f172a;   /* Color más oscuro (Hover de botones) */
+  --primary-light: #e2e8f0;  /* Fondo suave para elementos seleccionados */
 
-  /* Colores Principales (Rosa de la tarjeta) */
-  --primary: #d4a5a5;
-  --primary-dark: #c49090;
-  --primary-light: #fcf6f6;
+  /* 📄 FONDOS Y SUPERFICIES */
+  --background: #f8fafc;     /* Fondo general de toda la aplicación */
+  --surface: #ffffff;        /* Fondo de las tarjetas/cards (Blanco puro) */
+  --surface2: #f1f5f9;       /* Fondo secundario (Inputs, cabeceras de tablas) */
+
+  /* 📏 BORDES */
+  --border: #cbd5e1;         /* Bordes sutiles para inputs y tarjetas */
+
+  /* 📝 TEXTOS */
+  --text: #1e293b;           /* Texto principal (Casi negro para buena lectura) */
+  --text2: #475569;          /* Texto secundario (Subtítulos, etiquetas) */
+  --text3: #94a3b8;          /* Texto terciario (Placeholders, notas menores) */
+
+  /* 🚨 ALERTAS (Se mantiene el rojo para patologías, botones de borrar y advertencias) */
+  --danger: #dc2626;
+  --danger-light: #fef2f2;
+
+  /* 🟢 ÉXITO (Para mensajes de guardado correcto) */
+  --success: #16a34a;
+  --success-light: #f0fdf4;
   
-  /* Colores de Estado / Acento */
-  --accent: #d4a5a5; /* Usamos el rosa como acento principal */
-  --danger: #d98cb3;
-  --warning: #e6b89c;
-  
-  /* Textos (Grises y Plomos elegantes) */
-  --text: #4a4a4a;
-  --text2: #6c6c6c;
-  --text3: #a39b9b;
-  
-  /* Sombras y Radios originales */
-  --shadow: 0 1px 3px rgba(212,165,165,.08), 0 1px 2px rgba(212,165,165,.06);
-  --shadow-md: 0 4px 6px rgba(212,165,165,.07), 0 2px 4px rgba(212,165,165,.06);
-  --shadow-lg: 0 10px 15px rgba(212,165,165,.1), 0 4px 6px rgba(212,165,165,.05);
+  /* SOMBRAS */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
   --radius: 8px;
   --radius-sm: 5px;
   --font: 'Inter', system-ui, sans-serif;

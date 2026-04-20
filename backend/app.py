@@ -417,5 +417,41 @@ def obtener_deudores():
         print(f"Error en deudores: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/historia/editar_evento/<int:evento_id>', methods=['POST', 'OPTIONS'])
+def editar_evento_historia(evento_id):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
+    from config import get_db_connection
+    conn = get_db_connection() 
+    cursor = conn.cursor()
+    
+    try:
+        procedimiento = request.form.get('procedimiento', '')
+        piezas = request.form.get('piezas', '')
+        descripcion = request.form.get('descripcion', '')
+        monto = request.form.get('monto', '')
+        pagado = request.form.get('pagado', 'No')
+        pagos_detalle = request.form.get('pagos_detalle', '[]')
+        tiene_financiacion = request.form.get('tiene_financiacion', 'No')
+        cuotas = request.form.get('cuotas', '')
+
+        cursor.execute("""
+            UPDATE historia 
+            SET procedimiento = ?, piezas = ?, descripcion = ?, monto = ?, 
+                pagado = ?, pagos_detalle = ?, tiene_financiacion = ?, cuotas = ?
+            WHERE id = ?
+        """, (procedimiento, piezas, descripcion, monto, pagado, pagos_detalle, tiene_financiacion, cuotas, evento_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Intervención actualizada correctamente'}), 200
+
+    except Exception as e:
+        print(f"Error al editar evento: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+        
 if __name__ == "__main__":
     app.run(port=5050, debug=True)

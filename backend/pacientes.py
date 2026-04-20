@@ -1,18 +1,33 @@
 import os
 from datetime import datetime
 from config import get_db_connection
+from flask import request
 
 def listar_pacientes():
-    """Devuelve la lista de todos los pacientes activos."""
+    """Devuelve la lista de pacientes, opcionalmente filtrados por búsqueda."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Traemos todos los pacientes donde activo = 1, ordenados por apellido
-    cursor.execute("SELECT * FROM pacientes WHERE activo = 1 ORDER BY apellido ASC")
+    # Capturamos el parámetro 'q' de la URL (la búsqueda)
+    query = request.args.get('q', '')
+
+    if query:
+        # Si hay búsqueda, usamos LIKE para buscar en nombre, apellido o DNI
+        # Los % son comodines de SQL (busca "Lopez" en cualquier parte del texto)
+        busqueda_sql = f"%{query}%"
+        cursor.execute("""
+            SELECT * FROM pacientes 
+            WHERE activo = 1 
+            AND (nombre LIKE ? OR apellido LIKE ? OR dni LIKE ?)
+            ORDER BY apellido ASC
+        """, (busqueda_sql, busqueda_sql, busqueda_sql))
+    else:
+        # Si no hay búsqueda, devolvemos todos
+        cursor.execute("SELECT * FROM pacientes WHERE activo = 1 ORDER BY apellido ASC")
+        
     rows = cursor.fetchall()
     conn.close()
     
-    # Convertimos los resultados de sqlite3.Row a diccionarios normales de Python
     return [dict(row) for row in rows]
 
 def guardar_paciente(datos):
@@ -25,14 +40,22 @@ def guardar_paciente(datos):
     if not telefono or str(telefono).strip() == "":
         raise ValueError("El teléfono es obligatorio")
 
-    # Lista de todas las columnas que esperamos guardar
+    # === ACÁ ESTÁ EL CAMBIO: Agregamos las nuevas columnas médicas para el PDF ===
     columnas = [
         "dni", "nombre", "apellido", "fecha_nacimiento", "telefono", "email", 
         "obra_social", "nro_afiliado", "hipertenso", "diabetico", 
         "alteracion_coagulacion", "fuma", "tiempo_fumador", "asma", 
         "consume_drogas", "detalle_drogas", "insuficiencia_renal", 
         "insuficiencia_hepatica", "embarazada", "tiempo_embarazo", 
-        "valor_presion", "alergias"
+        "valor_presion", "alergias", 
+        
+        # Nuevas columnas inyectadas en la DB
+        "alergia", "ulsera_gast", "enf_respiratoria", "p_a", 
+        "epilepsia", "trast_cardiacos", "medicamentos", "antecedentes_hemor", 
+        "enfermedades_venereas", "hepatitis", "diabetes", "contacto_emergencia",
+        
+        # Y las del domicilio que pide el PDF
+        "domicilio", "localidad", "plan"
     ]
     
     conn = get_db_connection()

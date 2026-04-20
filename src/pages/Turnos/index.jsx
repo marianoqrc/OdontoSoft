@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, Plus } from 'lucide-react'
+import { CalendarDays, CalendarPlus } from 'lucide-react'
 import Agenda from './Agenda.jsx'
 import AgendarTurno from './AgendarTurno.jsx'
 
@@ -40,7 +40,8 @@ export default function Turnos() {
           onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-lg)'}
           onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow)'}
         >
-          <Plus size={40} color="var(--accent)" style={{ marginBottom: 14 }} />
+          
+          <CalendarPlus size={40} color="var(--primary)" style={{ marginBottom: 14 }} />
           <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>Agendar turno</div>
           <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>
             Seleccioná módulos de disponibilidad para crear un nuevo turno
