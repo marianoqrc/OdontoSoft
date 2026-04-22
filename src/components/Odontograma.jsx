@@ -99,10 +99,12 @@ function Pieza({ fdi, estados = {}, seleccionadas = {}, onClickPieza, onTogglePi
     const id = `${fdi}-${sec}`;
     const st = seleccionadas[id] || estados[id] || 'sano';
     if (st === 'sano') return null;
-    if (['ausente', 'extraccion_indicada', 'corona', 'endodoncia', 'ortodoncia'].includes(st)) return null;
 
     const colorObj = COLORES[st];
     if (!colorObj) return null;
+    
+
+    if (colorObj.isSymbol) return null;
 
     return (
       <text 

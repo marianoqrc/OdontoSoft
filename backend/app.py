@@ -12,7 +12,6 @@ import os
 from historia import actualizar_facturacion
 from flask import Flask, jsonify, request, send_from_directory
 import sys
-#D:\soft\odontosoft\backend> d:\soft\odontosoft\backend\.venv\Scripts\python.exe app.py
 
 # --- CONFIGURACIÓN PARA EL .EXE (PYINSTALLER) ---
 # Determinamos la ruta base dependiendo de si estamos corriendo como .exe o como script
@@ -21,8 +20,8 @@ if getattr(sys, 'frozen', False):
 else:
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Apuntamos Flask a la carpeta compilada de React (asumiendo que se llamará 'build')
-build_folder = os.path.join(base_dir, 'build')
+# Apuntamos Flask a la carpeta compilada de React (Vite genera 'dist')
+build_folder = os.path.join(base_dir, 'frontend_build')
 app = Flask(__name__, static_folder=build_folder, static_url_path='/')
 
 # CORS ya no es estrictamente necesario porque frontend y backend corren en el mismo puerto,
@@ -238,7 +237,6 @@ def crear_turno():
     except PermissionError as e:
         return jsonify({"error": str(e)}), 423
 
-# Así tiene que quedar en tu app.py
 @app.route("/turnos/<int:turno_id>", methods=["DELETE"])
 def cancelar_turno(turno_id):
     try:
@@ -519,6 +517,16 @@ def editar_evento_historia(evento_id):
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_frontend(path):
+    # 1. Revisamos si la carpeta frontend_build realmente se copió al .exe
+    if not os.path.exists(app.static_folder):
+        return f"<h1>Error 1: Carpeta perdida</h1><p>Flask está buscando tu diseño en esta ruta exacta, pero no existe: <b>{app.static_folder}</b></p>", 404
+        
+    # 2. Revisamos si el index.html está adentro de esa carpeta
+    index_path = os.path.join(app.static_folder, 'index.html')
+    if not os.path.exists(index_path):
+        return f"<h1>Error 2: Archivo fantasma</h1><p>La carpeta se copió, pero adentro no está el <b>index.html</b>. Ruta revisada: <b>{index_path}</b></p>", 404
+
+    # 3. Si todo está bien, lo mostramos
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     else:
@@ -529,7 +537,14 @@ if __name__ == "__main__":
     from threading import Timer
     
     def abrir_navegador():
-        webbrowser.open_new("http://localhost:5050")
+        url = "http://localhost:5050"
+        import os
+        # Intenta abrir Chrome en modo "App" (sin barra de navegación)
+        if os.system(f'start chrome --app="{url}"') != 0:
+            # Si el usuario no tiene Chrome, intenta con Edge (que viene en todo Windows)
+            if os.system(f'start msedge --app="{url}"') != 0:
+                # Si falla todo, abre el navegador normal de siempre
+                webbrowser.open_new(url)
         
     # Si está empaquetado como .exe, abre el navegador automáticamente tras 1.5 segundos
     if getattr(sys, 'frozen', False):
