@@ -7,7 +7,8 @@ from werkzeug.utils import secure_filename
 # Funciones de carpetas físicas para los archivos adjuntos
 def get_carpeta_paciente(dni):
     """Devuelve la ruta a la carpeta física del paciente."""
-    return os.path.join(DATA_DIR, str(dni))
+    from werkzeug.utils import secure_filename
+    return os.path.join(DATA_DIR, secure_filename(str(dni)))
 
 def leer_historia(dni):
     """Lee todos los eventos de la historia clínica de un paciente desde SQLite."""
@@ -110,7 +111,8 @@ def guardar_adjuntos(dni, id_adjunto, archivos_lista):
         return
     
     # Crea la ruta de la carpeta si no existe
-    carpeta_destino = os.path.join(get_carpeta_paciente(dni), str(id_adjunto))
+    from werkzeug.utils import secure_filename
+    carpeta_destino = os.path.join(get_carpeta_paciente(dni), "adjuntos", secure_filename(str(id_adjunto)))
     os.makedirs(carpeta_destino, exist_ok=True)
     
     for archivo in archivos_lista:

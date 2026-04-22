@@ -11,6 +11,10 @@ function duracionTexto(mins) {
   return m > 0 ? `${h}h ${m}min` : `${h}h`
 }
 
+// NOTA: Se asume que tienes una función global para mostrar notificaciones (Toast).
+// Podrías implementarla con un Context de React o una librería como 'react-toastify'.
+const mostrarToast = (mensaje, tipo = 'info') => alert(`[${tipo.toUpperCase()}] ${mensaje}`);
+
 export default function Agenda({ onVolver }) {
   const [dia, setDia] = useState(new Date())
   const [turno, setTurno] = useState('manana') 
@@ -82,14 +86,14 @@ export default function Agenda({ onVolver }) {
       const data = await res.json();
 
       if (!res.ok) {
-          throw new Error(data.error || 'Error al eliminar el turno');
+          throw new Error(data.error || 'Error desconocido al eliminar el turno');
       }
       
       setTurnoSeleccionado(null); 
       cargar(); 
-      
+      mostrarToast('Turno cancelado correctamente.', 'success');
     } catch (error) {
-      alert("Hubo un problema al eliminar el turno: " + error.message);
+      mostrarToast(error.message, 'error');
     }
   }
 
@@ -110,10 +114,10 @@ export default function Agenda({ onVolver }) {
       if (!res.ok) throw new Error(data.error || 'Error al actualizar el turno');
       
       setTurnoSeleccionado(null); 
-      cargar(); 
-      
+      cargar();
+      mostrarToast('Turno actualizado.', 'success');
     } catch (error) {
-      alert("Hubo un problema al guardar: " + error.message);
+      mostrarToast(error.message, 'error');
     }
   }
 

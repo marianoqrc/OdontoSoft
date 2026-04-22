@@ -30,7 +30,7 @@ def listar_pacientes():
     
     return [dict(row) for row in rows]
 
-def guardar_paciente(datos):
+def guardar_paciente(datos, es_nuevo=False):
     """Crea un paciente nuevo o actualiza uno existente."""
     dni = datos.get("dni")
     if not dni:
@@ -64,6 +64,10 @@ def guardar_paciente(datos):
     # Chequeamos si el paciente ya existe
     cursor.execute("SELECT dni FROM pacientes WHERE dni = ?", (dni,))
     existe = cursor.fetchone()
+
+    if es_nuevo and existe:
+        conn.close()
+        raise ValueError("Ya existe un paciente registrado con ese DNI.")
 
     if existe:
         # ACTUALIZAR (UPDATE)

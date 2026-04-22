@@ -49,5 +49,5 @@ export default function Turnos() {
         </div>
       </div>
     </div>
-  )
+  ) 
 }

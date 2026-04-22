@@ -25,8 +25,13 @@ MODULOS_MANANA = generar_modulos(HORA_MANANA_INICIO, HORA_MANANA_FIN)
 MODULOS_TARDE  = generar_modulos(HORA_TARDE_INICIO,  HORA_TARDE_FIN)
 
 def hora_a_mins(hora):
-    h, m = map(int, hora.split(':'))
-    return h * 60 + m
+    if not hora:
+        raise ValueError("Hora no puede ser nula.")
+    try:
+        h, m = map(int, str(hora).split(':'))
+        return h * 60 + m
+    except (ValueError, AttributeError):
+        raise ValueError(f"Formato de hora inválido: {hora}")
 
 def mins_a_hora(mins):
     return f"{mins//60:02d}:{mins%60:02d}"
@@ -103,9 +108,12 @@ def get_timeline(fecha_str, turno="manana"):
     hora_fin_str = HORA_MANANA_FIN if turno == "manana" else HORA_TARDE_FIN
     ocupados = leer_por_fecha(fecha_str)
     
-    # Obtenemos todos los pacientes para cruzar datos
-    lista_pacientes = pac.listar_pacientes()
-    mapa_pacientes = {str(p.get("dni")): p.get("telefono", "") for p in lista_pacientes}
+    # Obtenemos TODOS los pacientes directo de la DB (incluso inactivos) para evitar huecos en historial
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT dni, telefono FROM pacientes")
+    mapa_pacientes = {str(row["dni"]): row["telefono"] for row in cursor.fetchall()}
+    conn.close()
 
     # Turnos del período
     inicio_periodo = hora_a_mins(modulos[0])
@@ -172,6 +180,9 @@ def crear_turno(datos):
     ocupados = leer_por_fecha(fecha)
     inicio_nuevo = hora_a_mins(hora_inicio)
     fin_nuevo    = hora_a_mins(hora_fin)
+    
+    if inicio_nuevo >= fin_nuevo:
+        raise ValueError("La hora de fin debe ser posterior a la hora de inicio.")
 
     for t in ocupados:
         ini = hora_a_mins(str(t["hora_inicio"]))

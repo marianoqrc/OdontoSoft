@@ -10,22 +10,51 @@ from flask import send_file as flask_send_file
 import json
 import os
 from historia import actualizar_facturacion
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
+import sys
 #D:\soft\odontosoft\backend> d:\soft\odontosoft\backend\.venv\Scripts\python.exe app.py
 
-app = Flask(__name__)
-CORS(app)
+# --- CONFIGURACIÓN PARA EL .EXE (PYINSTALLER) ---
+# Determinamos la ruta base dependiendo de si estamos corriendo como .exe o como script
+if getattr(sys, 'frozen', False):
+    base_dir = sys._MEIPASS
+else:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Apuntamos Flask a la carpeta compilada de React (asumiendo que se llamará 'build')
+build_folder = os.path.join(base_dir, 'build')
+app = Flask(__name__, static_folder=build_folder, static_url_path='/')
+
+# CORS ya no es estrictamente necesario porque frontend y backend corren en el mismo puerto,
+# pero lo dejamos para desarrollo local.
+CORS(app, resources={r"/*": {"origins": "*"}})
 init_data_dir()
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Evitar DoS: Límite global de archivos a 16MB
 
 @app.route('/historia/editar_caja/<int:id_evento>', methods=['POST'])
 def api_editar_facturacion(id_evento):
     try:
         import historia as hist
+        import json
         
+        monto = request.form.get("monto", "")
+        if monto:
+            try:
+                if float(monto) < 0:
+                    return jsonify({"error": "El monto no puede ser negativo"}), 400
+            except ValueError:
+                return jsonify({"error": "El monto debe ser numérico"}), 400
+                
+        pagos_detalle = request.form.get("pagos_detalle", "[]")
+        try:
+            json.loads(pagos_detalle)
+        except json.JSONDecodeError:
+            return jsonify({"error": "Detalle de pagos con formato inválido"}), 400
+
         # Atrapamos los datos editados
         datos = {
-            "monto": request.form.get("monto", ""),
-            "pagos_detalle": request.form.get("pagos_detalle", "[]"),
+            "monto": monto,
+            "pagos_detalle": pagos_detalle,
             "tiene_financiacion": request.form.get("tiene_financiacion", "No"),
             "cuotas": request.form.get("cuotas", ""),
             "pagado": request.form.get("pagado", "No")
@@ -57,7 +86,7 @@ def manejar_pacientes():
         if request.method == "POST":
             # Si manda JSON lo leemos como JSON, si no, como Form (para atajar cualquier cosa)
             datos = request.json if request.is_json else request.form.to_dict()
-            resultado = pac.guardar_paciente(datos)
+            resultado = pac.guardar_paciente(datos, es_nuevo=True)
             return jsonify(resultado), 201
             
     except PermissionError as e:
@@ -73,7 +102,7 @@ def actualizar_paciente(dni):
     try:
         datos = request.get_json()
         datos["dni"] = dni
-        resultado = pac.guardar_paciente(datos)
+        resultado = pac.guardar_paciente(datos, es_nuevo=False)
         return jsonify(resultado)
     except PermissionError as e:
         return jsonify({"error": str(e)}), 423
@@ -111,14 +140,28 @@ def post_evento(dni):
         except json.JSONDecodeError:
             piezas = piezas_raw.split(',') if piezas_raw else []
 
+        monto = request.form.get('monto', '')
+        if monto:
+            try:
+                if float(monto) < 0:
+                    return jsonify({"error": "El monto no puede ser negativo"}), 400
+            except ValueError:
+                return jsonify({"error": "El monto debe ser numérico"}), 400
+
+        pagos_detalle = request.form.get('pagos_detalle', '[]')
+        try:
+            json.loads(pagos_detalle)
+        except json.JSONDecodeError:
+            return jsonify({"error": "Formato de pagos inválido"}), 400
+
         # Atrapamos los datos de la caja
         evento = {
             'procedimiento': procedimiento,
             'descripcion':   descripcion,
             'piezas':        piezas,
-            'monto':         request.form.get('monto', ''),
+            'monto':         monto,
             'pagado':        request.form.get('pagado', 'No'),
-            'pagos_detalle': request.form.get('pagos_detalle', '[]'),
+            'pagos_detalle': pagos_detalle,
             'tiene_financiacion': request.form.get('tiene_financiacion', 'No'),
             'cuotas':        request.form.get('cuotas', '')
         }
@@ -218,7 +261,8 @@ def modificar_turno(turno_id):
 @app.route("/adjuntos/<dni>/<id_adjunto>", methods=["GET"])
 def listar_adjuntos(dni, id_adjunto):
     from config import DATA_DIR
-    carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+    from werkzeug.utils import secure_filename
+    carpeta = os.path.join(DATA_DIR, secure_filename(str(dni)), "adjuntos", secure_filename(str(id_adjunto)))
     if not os.path.exists(carpeta):
         return jsonify([])
     archivos = []
@@ -240,7 +284,7 @@ def subir_adjunto(dni, id_adjunto):
     archivo = request.files['archivo']
     if archivo.filename == '':
         return jsonify({"error": "Nombre de archivo vacío"}), 400
-    carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+    carpeta = os.path.join(DATA_DIR, secure_filename(str(dni)), "adjuntos", secure_filename(str(id_adjunto)))
     os.makedirs(carpeta, exist_ok=True)
     nombre = secure_filename(archivo.filename)
     archivo.save(os.path.join(carpeta, nombre))
@@ -250,7 +294,7 @@ def subir_adjunto(dni, id_adjunto):
 def descargar_adjunto(dni, id_adjunto, nombre):
     from config import DATA_DIR
     from werkzeug.utils import secure_filename
-    carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+    carpeta = os.path.join(DATA_DIR, secure_filename(str(dni)), "adjuntos", secure_filename(str(id_adjunto)))
     ruta = os.path.join(carpeta, secure_filename(nombre))
     if not os.path.exists(ruta):
         return jsonify({"error": "Archivo no encontrado"}), 404
@@ -260,7 +304,7 @@ def descargar_adjunto(dni, id_adjunto, nombre):
 def eliminar_adjunto(dni, id_adjunto, nombre):
     from config import DATA_DIR
     from werkzeug.utils import secure_filename
-    carpeta = os.path.join(DATA_DIR, str(dni), "adjuntos", id_adjunto)
+    carpeta = os.path.join(DATA_DIR, secure_filename(str(dni)), "adjuntos", secure_filename(str(id_adjunto)))
     ruta = os.path.join(carpeta, secure_filename(nombre))
     if os.path.exists(ruta):
         os.remove(ruta)
@@ -431,8 +475,23 @@ def editar_evento_historia(evento_id):
         piezas = request.form.get('piezas', '')
         descripcion = request.form.get('descripcion', '')
         monto = request.form.get('monto', '')
+        
+        if monto:
+            try:
+                if float(monto) < 0:
+                    return jsonify({'error': 'El monto no puede ser negativo'}), 400
+            except ValueError:
+                return jsonify({'error': 'El monto debe ser numérico'}), 400
+                
         pagado = request.form.get('pagado', 'No')
         pagos_detalle = request.form.get('pagos_detalle', '[]')
+        
+        import json
+        try:
+            json.loads(pagos_detalle)
+        except json.JSONDecodeError:
+            return jsonify({'error': 'Formato de pagos inválido'}), 400
+            
         tiene_financiacion = request.form.get('tiene_financiacion', 'No')
         cuotas = request.form.get('cuotas', '')
 
@@ -443,6 +502,9 @@ def editar_evento_historia(evento_id):
             WHERE id = ?
         """, (procedimiento, piezas, descripcion, monto, pagado, pagos_detalle, tiene_financiacion, cuotas, evento_id))
         
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Intervención no encontrada'}), 404
+            
         conn.commit()
         return jsonify({'message': 'Intervención actualizada correctamente'}), 200
 
@@ -452,6 +514,26 @@ def editar_evento_historia(evento_id):
     finally:
         conn.close()
 
+
+# --- RUTA COMODÍN PARA SERVIR REACT ---
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
         
 if __name__ == "__main__":
-    app.run(port=5050, debug=True)
+    import webbrowser
+    from threading import Timer
+    
+    def abrir_navegador():
+        webbrowser.open_new("http://localhost:5050")
+        
+    # Si está empaquetado como .exe, abre el navegador automáticamente tras 1.5 segundos
+    if getattr(sys, 'frozen', False):
+        Timer(1.5, abrir_navegador).start()
+        
+    # host='127.0.0.1' asegura que el sistema solo se pueda abrir desde esta PC
+    app.run(host='127.0.0.1', port=5050, debug=False)
